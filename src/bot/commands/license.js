@@ -235,9 +235,10 @@ export async function execute(interaction) {
       );
 
       const populated = await Plugin.findById(pluginId).lean();
-      license.pluginId = populated;
+      const licenseObj = license.toObject();
+      licenseObj.pluginId = populated;
 
-      const embed = createLicenseCreatedEmbed(license, license.key);
+      const embed = createLicenseCreatedEmbed(licenseObj, license.key);
       await interaction.reply({ embeds: [embed], ephemeral: true });
     } catch (err) {
       const errEmbed = createErrorEmbed('License Creation Failed', err.message);

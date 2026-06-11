@@ -39,6 +39,10 @@ export async function handleSelect(interaction) {
           .setCustomId(`my_manage_ips:${license.key}`)
           .setLabel('⚙️ Manage Whitelisted IPs')
           .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(`my_copy_key:${license.key}`)
+          .setLabel('📋 Copy License Key')
+          .setStyle(ButtonStyle.Secondary),
       );
 
       // If already deferred or replied, update it, otherwise reply

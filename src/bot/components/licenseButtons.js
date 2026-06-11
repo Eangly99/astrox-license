@@ -92,6 +92,40 @@ export async function handleButton(interaction) {
     return;
   }
 
+  // 3c. Copy License Key button click
+  if (customId.startsWith('my_copy_key:')) {
+    const key = customId.substring('my_copy_key:'.length);
+    log.debug({ key: key.substring(key.length - 8) }, 'User requested license key plaintext copy');
+
+    try {
+      const license = await getLicenseByKey(key);
+      if (!license) {
+        const errorEmbed = createErrorEmbed('Not Found', 'This license key no longer exists.');
+        return await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+      }
+
+      if (license.ownerId !== interaction.user.id) {
+        const errorEmbed = createErrorEmbed(
+          'Access Denied',
+          'You do not have permission to copy this license.',
+        );
+        return await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+      }
+
+      const copyEmbed = createSuccessEmbed(
+        'License Key Retrieved',
+        `Below is your plaintext license key. Click inside the code block to select and copy it.\n\n\`\`\`\n${key}\n\`\`\`\n\n> [!WARNING]\n> **Keep this key private!** Sharing this key can result in automatic suspension of your license.`,
+      );
+
+      await interaction.reply({ embeds: [copyEmbed], flags: MessageFlags.Ephemeral });
+    } catch (err) {
+      log.error({ err }, 'Failed to retrieve license key copy');
+      const errorEmbed = createErrorEmbed('Error', 'Unable to retrieve license key at this time.');
+      await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+    }
+    return;
+  }
+
   // 3b. Manage IPs button click for /mylicense
   if (customId.startsWith('my_manage_ips:')) {
     const key = customId.substring('my_manage_ips:'.length);

@@ -40,6 +40,10 @@ export async function execute(interaction) {
           .setCustomId(`my_manage_ips:${license.key}`)
           .setLabel('⚙️ Manage Whitelisted IPs')
           .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(`my_copy_key:${license.key}`)
+          .setLabel('📋 Copy License Key')
+          .setStyle(ButtonStyle.Secondary),
       );
 
       return await interaction.reply({

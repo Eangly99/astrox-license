@@ -1,6 +1,6 @@
 import { inlineCode, MessageFlags } from 'discord.js';
 import Plugin from '../../db/models/Plugin.js';
-import { createLicense } from '../../services/licenseService.js';
+import { createLicense, updateLicenseIps, getLicenseByKey } from '../../services/licenseService.js';
 import { createLogger } from '../../utils/logger.js';
 import { createSuccessEmbed, createErrorEmbed } from '../embeds/commonEmbeds.js';
 import { DURATION_PRESETS } from '../../utils/constants.js';
@@ -12,7 +12,43 @@ const log = createLogger('license-modal');
  * @param {import('discord.js').ModalSubmitInteraction} interaction
  */
 export async function handleModal(interaction) {
-  if (interaction.customId !== 'bulk_generate_modal') return;
+  const customId = interaction.customId;
+
+  if (customId.startsWith('my_ips_modal:')) {
+    const key = customId.substring('my_ips_modal:'.length);
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const rawIps = interaction.fields.getTextInputValue('allowed_ips_input');
+    const ips = rawIps
+      .split(/[\n,]/)
+      .map((ip) => ip.trim())
+      .filter((ip) => ip.length > 0);
+
+    try {
+      await updateLicenseIps(key, interaction.user.id, ips, interaction.user.id);
+      const license = await getLicenseByKey(key);
+
+      const successEmbed = createSuccessEmbed(
+        'IP Whitelist Updated',
+        `Successfully updated whitelisted IP addresses for your plugin license.\n\n**Whitelisted IPs (${ips.length}/${license.maxIps}):**\n${
+          ips.length > 0
+            ? ips.map((ip) => `• \`${ip}\``).join('\n')
+            : '*No IP addresses whitelisted. Auto-binding on next validation.*'
+        }`,
+      );
+
+      return await interaction.editReply({ embeds: [successEmbed] });
+    } catch (err) {
+      log.error(
+        { err, key: key.substring(key.length - 8) },
+        'Failed to update IPs from modal submission',
+      );
+      const errEmbed = createErrorEmbed('IP Update Failed', err.message);
+      return await interaction.editReply({ embeds: [errEmbed] });
+    }
+  }
+
+  if (customId !== 'bulk_generate_modal') return;
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 

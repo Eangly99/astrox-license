@@ -23,6 +23,7 @@ export const AUDIT_ACTIONS = Object.freeze({
   REACTIVATE: 'reactivate',
   BLACKLIST_ADD: 'blacklist_add',
   BLACKLIST_REMOVE: 'blacklist_remove',
+  UPDATE_IPS: 'update_ips',
 });
 
 /** Blacklist entry types */

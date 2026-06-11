@@ -1,9 +1,12 @@
-import { SlashCommandBuilder,
+import {
+  SlashCommandBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   bold,
-  userMention, MessageFlags } from 'discord.js';
+  userMention,
+  MessageFlags,
+} from 'discord.js';
 import Plugin from '../../db/models/Plugin.js';
 import {
   createLicense,
@@ -25,6 +28,8 @@ import { DURATION_PRESETS } from '../../utils/constants.js';
 import { generateLicenseSchema, transferLicenseSchema } from '../../utils/validators.js';
 import { pendingRevocations } from '../components/licenseButtons.js';
 import { maskKey } from '../../utils/formatters.js';
+
+export const adminOnly = true;
 
 export const data = new SlashCommandBuilder()
   .setName('license')
@@ -268,7 +273,11 @@ export async function execute(interaction) {
           .setStyle(ButtonStyle.Primary),
       );
 
-      await interaction.reply({ embeds: [embed], components: [row], flags: MessageFlags.Ephemeral });
+      await interaction.reply({
+        embeds: [embed],
+        components: [row],
+        flags: MessageFlags.Ephemeral,
+      });
     } catch {
       const errEmbed = createErrorEmbed('Failed', 'An error occurred during query execution.');
       await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
@@ -314,7 +323,11 @@ export async function execute(interaction) {
           .setStyle(ButtonStyle.Secondary),
       );
 
-      await interaction.reply({ embeds: [confirmEmbed], components: [row], flags: MessageFlags.Ephemeral });
+      await interaction.reply({
+        embeds: [confirmEmbed],
+        components: [row],
+        flags: MessageFlags.Ephemeral,
+      });
     } catch {
       const errEmbed = createErrorEmbed('Failed', 'Failed to initialize revocation process.');
       await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
@@ -381,7 +394,11 @@ export async function execute(interaction) {
           .setDisabled(page >= totalPages),
       );
 
-      await interaction.reply({ embeds: [embed], components: [row], flags: MessageFlags.Ephemeral });
+      await interaction.reply({
+        embeds: [embed],
+        components: [row],
+        flags: MessageFlags.Ephemeral,
+      });
     } catch {
       const errEmbed = createErrorEmbed('Query Failed', 'Unable to retrieve license list.');
       await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });

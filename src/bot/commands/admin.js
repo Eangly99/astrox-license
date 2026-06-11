@@ -1,9 +1,12 @@
-import { SlashCommandBuilder,
+import {
+  SlashCommandBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   bold,
-  inlineCode, MessageFlags } from 'discord.js';
+  inlineCode,
+  MessageFlags,
+} from 'discord.js';
 import Blacklist from '../../db/models/Blacklist.js';
 import AuditLog from '../../db/models/AuditLog.js';
 import Plugin from '../../db/models/Plugin.js';
@@ -228,7 +231,11 @@ export async function execute(interaction) {
           .setDisabled(page >= totalPages),
       );
 
-      await interaction.reply({ embeds: [embed], components: [row], flags: MessageFlags.Ephemeral });
+      await interaction.reply({
+        embeds: [embed],
+        components: [row],
+        flags: MessageFlags.Ephemeral,
+      });
     } catch {
       const errEmbed = createErrorEmbed('Query Failed', 'Failed to retrieve audit log registry.');
       await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });

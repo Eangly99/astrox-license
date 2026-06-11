@@ -8,6 +8,7 @@ import {
   createLicense,
   validateLicense,
   transferLicense,
+  updateLicenseIps,
 } from '../../src/services/licenseService.js';
 
 describe('License Service Integration Tests', () => {
@@ -232,5 +233,47 @@ describe('License Service Integration Tests', () => {
     expect(transferred.ownerId).toBe('222');
     expect(transferred.hwid).toBeNull();
     expect(transferred.allowedIps).toHaveLength(0);
+  });
+
+  it('should update whitelisted IPs successfully', async () => {
+    const lic = await createLicense(
+      {
+        pluginId: mockPlugin._id.toString(),
+        ownerId: 'my_user_id',
+        ownerTag: 'Me#1234',
+        type: 'lifetime',
+        maxIps: 3,
+      },
+      'admin_user_id',
+    );
+
+    // Update with valid IPs under limit
+    const updated = await updateLicenseIps(
+      lic.key,
+      'my_user_id',
+      ['192.168.1.1', '10.0.0.1'],
+      'my_user_id',
+    );
+    expect(updated.allowedIps).toEqual(['192.168.1.1', '10.0.0.1']);
+
+    // Should fail with too many IPs
+    await expect(
+      updateLicenseIps(
+        lic.key,
+        'my_user_id',
+        ['1.1.1.1', '2.2.2.2', '3.3.3.3', '4.4.4.4'],
+        'my_user_id',
+      ),
+    ).rejects.toThrow('IP limit exceeded');
+
+    // Should fail with invalid IP format
+    await expect(
+      updateLicenseIps(lic.key, 'my_user_id', ['not-an-ip'], 'my_user_id'),
+    ).rejects.toThrow('Invalid IPv4 address format');
+
+    // Should fail if not the owner
+    await expect(
+      updateLicenseIps(lic.key, 'someone_else', ['1.1.1.1'], 'someone_else'),
+    ).rejects.toThrow('License not found');
   });
 });

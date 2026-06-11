@@ -385,3 +385,51 @@ export async function getStats() {
     plugins: pluginBreakdown,
   };
 }
+
+/**
+ * Update whitelisted IP addresses for a user's license.
+ */
+export async function updateLicenseIps(key, ownerId, ips, actorId) {
+  log.info(
+    { key: maskKey(key), ownerId, ipsCount: ips.length, actorId },
+    'Updating whitelisted IPs...',
+  );
+
+  const license = await License.findOne({ key, ownerId });
+  if (!license) {
+    throw new Error('License not found or does not belong to you.');
+  }
+
+  if (license.status !== LICENSE_STATUS.ACTIVE) {
+    throw new Error(`Cannot update IPs on a ${license.status} license.`);
+  }
+
+  if (ips.length > license.maxIps) {
+    throw new Error(
+      `IP limit exceeded. Maximum allowed: ${license.maxIps}, provided: ${ips.length}`,
+    );
+  }
+
+  const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
+  for (const ip of ips) {
+    if (!ipRegex.test(ip)) {
+      throw new Error(`Invalid IPv4 address format: ${ip}`);
+    }
+  }
+
+  const oldIps = [...license.allowedIps];
+  license.allowedIps = ips;
+  await license.save();
+
+  // Audit log
+  await AuditLog.log(AUDIT_ACTIONS.UPDATE_IPS, actorId, key, {
+    oldIps,
+    newIps: ips,
+  });
+
+  // Clear validation cache prefix if possible
+  await cacheService.delete(`validate:${key}`);
+
+  log.info({ key: maskKey(key), ownerId }, 'License IPs updated successfully');
+  return license;
+}

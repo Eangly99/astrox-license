@@ -1,4 +1,12 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  MessageFlags,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+} from 'discord.js';
 import { revokeLicense, getLicenseByKey, listLicenses } from '../../services/licenseService.js';
 import { createLogger } from '../../utils/logger.js';
 import { createSuccessEmbed, createErrorEmbed } from '../embeds/commonEmbeds.js';
@@ -79,6 +87,50 @@ export async function handleButton(interaction) {
         'Error',
         'Unable to retrieve license details at this time.',
       );
+      await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+    }
+    return;
+  }
+
+  // 3b. Manage IPs button click for /mylicense
+  if (customId.startsWith('my_manage_ips:')) {
+    const key = customId.substring('my_manage_ips:'.length);
+    log.debug({ key: key.substring(key.length - 8) }, 'User requested IP management modal');
+
+    try {
+      const license = await getLicenseByKey(key);
+      if (!license) {
+        const errorEmbed = createErrorEmbed('Not Found', 'This license key no longer exists.');
+        return await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+      }
+
+      if (license.ownerId !== interaction.user.id) {
+        const errorEmbed = createErrorEmbed(
+          'Access Denied',
+          'You do not have permission to manage this license.',
+        );
+        return await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+      }
+
+      const modal = new ModalBuilder()
+        .setCustomId(`my_ips_modal:${key}`)
+        .setTitle('Manage Whitelisted IPs');
+
+      const ipInput = new TextInputBuilder()
+        .setCustomId('allowed_ips_input')
+        .setLabel(`IPs (one per line, max: ${license.maxIps})`)
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('e.g.\n192.168.1.1\n10.0.0.5')
+        .setValue(license.allowedIps.join('\n'))
+        .setRequired(false);
+
+      const actionRow = new ActionRowBuilder().addComponents(ipInput);
+      modal.addComponents(actionRow);
+
+      await interaction.showModal(modal);
+    } catch (err) {
+      log.error({ err }, 'Failed to construct/show IP management modal');
+      const errorEmbed = createErrorEmbed('Error', 'Unable to process your request at this time.');
       await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
     }
     return;

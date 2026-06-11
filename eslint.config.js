@@ -37,6 +37,17 @@ export default [
     },
   },
   {
+    files: ['docs/**/*.js'],
+    languageOptions: {
+      globals: {
+        document: 'readonly',
+        window: 'readonly',
+        navigator: 'readonly',
+        setTimeout: 'readonly',
+      },
+    },
+  },
+  {
     ignores: ['node_modules/**', 'coverage/**', 'dist/**'],
   },
 ];

@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AstroX License — Developer Wiki & Docs</title>
+    <meta
+      name="description"
+      content="Official documentation and integration guide for AstroX License Discord bot and handshake REST API."
+    />
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="index.css" />
+  </head>
+  <body>
+    <!-- Navbar -->
+    <header class="navbar">
+      <div class="nav-container">
+        <div class="logo">
+          <span class="logo-glow">AstroX</span>
+          <span class="logo-text">License</span>
+        </div>
+        <div class="search-container">
+          <input type="text" id="search-input" placeholder="Search documentation..." />
+          <span class="search-kbd">/</span>
+        </div>
+        <button class="mobile-toggle" id="menu-toggle" aria-label="Toggle Menu">
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="layout-container">
+      <!-- Sidebar Navigation -->
+      <aside class="sidebar" id="sidebar">
+        <nav class="nav-menu">
+          <div class="nav-group">
+            <span class="nav-group-title">Getting Started</span>
+            <a href="#intro" class="nav-link active">Introduction</a>
+            <a href="#setup" class="nav-link">Setup & Deploy</a>
+          </div>
+          <div class="nav-group">
+            <span class="nav-group-title">Discord Bot</span>
+            <a href="#commands" class="nav-link">Slash Commands</a>
+          </div>
+          <div class="nav-group">
+            <span class="nav-group-title">REST API Handshake</span>
+            <a href="#api" class="nav-link">Validation Endpoint</a>
+          </div>
+          <div class="nav-group">
+            <span class="nav-group-title">Java Plugin Integration</span>
+            <a href="#hwid" class="nav-link">HWID Extraction</a>
+            <a href="#handshake" class="nav-link">Handshake Manager</a>
+            <a href="#anti-crack" class="nav-link">Anti-Crack Security</a>
+          </div>
+        </nav>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="content">
+        <!-- Introduction -->
+        <section id="intro" class="doc-section">
+          <h1>Introduction</h1>
+          <p class="lead">
+            AstroX License is a production-grade, high-performance license management system
+            designed for Minecraft plugins (Spigot/Paper).
+          </p>
+          <p>
+            By combining an interactive self-service Discord bot with a secure Fastify REST API,
+            AstroX License allows plugin developers to distribute, verify, and manage licenses with
+            zero friction. The system binds licenses cryptographically to server hardware
+            fingerprints on first use, features IP rate-limiting, and automatically suspends shared
+            licenses performing concurrent handshakes from multiple networks.
+          </p>
+
+          <div class="card-grid">
+            <div class="feature-card">
+              <div class="feature-icon glow-purple">🔑</div>
+              <h3>HMAC Signatures</h3>
+              <p>
+                License keys are signed cryptographically using timing-safe SHA-256 HMAC prefixes to
+                eliminate key-forging attempts.
+              </p>
+            </div>
+            <div class="feature-card">
+              <div class="feature-icon glow-green">🔒</div>
+              <h3>HWID Lock</h3>
+              <p>
+                Locks licenses to hardware fingerprints dynamically on first use, blocking
+                unauthorized duplication.
+              </p>
+            </div>
+            <div class="feature-card">
+              <div class="feature-icon glow-red">📡</div>
+              <h3>Shared Protection</h3>
+              <p>
+                Automatically flags and suspends licenses performing validation handshakes from >3
+                unique IPs in 24 hours.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Setup & Deploy -->
+        <section id="setup" class="doc-section">
+          <h1>Setup & Deployment</h1>
+          <p>
+            Deploy AstroX License on your VPS, hosting node, or directly inside Pterodactyl Panel
+            using Node.js v23+.
+          </p>
+
+          <h2>Prerequisites</h2>
+          <ul>
+            <li>Node.js 23.0.0+</li>
+            <li>MongoDB (Local instance or Atlas connection)</li>
+            <li>Redis (Optional, for validation cache sharing)</li>
+            <li>pnpm or npm package manager</li>
+          </ul>
+
+          <h2>Configuration (.env)</h2>
+          <p>Configure environment variables by cloning the template file:</p>
+          <div class="code-header">
+            <span>Bash</span>
+            <button class="copy-btn" data-copy="cp .env.example .env">Copy</button>
+          </div>
+          <pre><code>cp .env.example .env</code></pre>
+
+          <h2>Registering Slash Commands</h2>
+          <p>Command schemas must be registered to the Discord Gateway before boot:</p>
+          <div class="code-header">
+            <span>Bash</span>
+            <button class="copy-btn" data-copy="npm run deploy">Copy</button>
+          </div>
+          <pre><code>npm run deploy</code></pre>
+
+          <h2>Starting the Service</h2>
+          <div class="code-header">
+            <span>Bash</span>
+            <button class="copy-btn" data-copy="npm start">Copy</button>
+          </div>
+          <pre><code>npm start</code></pre>
+        </section>
+
+        <!-- Slash Commands -->
+        <section id="commands" class="doc-section">
+          <h1>Slash Command Suite</h1>
+          <p>
+            The system consolidates interactions into two high-performance root commands:
+            <code>/license</code> and <code>/admin</code>.
+          </p>
+
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Command</th>
+                <th>Arguments</th>
+                <th>Access</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>/license generate</code></td>
+                <td>
+                  <code>plugin</code>, <code>user</code>, <code>type</code>,
+                  <code>[duration]</code>, <code>[max-ips]</code>
+                </td>
+                <td>Staff / Role</td>
+                <td>Create UUID-HMAC license keys.</td>
+              </tr>
+              <tr>
+                <td><code>/license verify</code></td>
+                <td><code>key</code></td>
+                <td>All staff</td>
+                <td>View detailed status and bindings with checking buttons.</td>
+              </tr>
+              <tr>
+                <td><code>/license list</code></td>
+                <td><code>[user]</code>, <code>[plugin]</code>, <code>[status]</code></td>
+                <td>All staff</td>
+                <td>List licenses with filters and pagination.</td>
+              </tr>
+              <tr>
+                <td><code>/license transfer</code></td>
+                <td><code>key</code>, <code>new-owner</code></td>
+                <td>All staff</td>
+                <td>Transfer ownership, resetting HWID/IP locks.</td>
+              </tr>
+              <tr>
+                <td><code>/license revoke</code></td>
+                <td><code>key</code>, <code>[reason]</code></td>
+                <td>Admin</td>
+                <td>Deactivates a license key permanently (confirm dialog).</td>
+              </tr>
+              <tr>
+                <td><code>/admin stats</code></td>
+                <td>None</td>
+                <td>Admin</td>
+                <td>Dashboard metrics panel displaying system load counts.</td>
+              </tr>
+              <tr>
+                <td><code>/admin blacklist &lt;add|remove|list&gt;</code></td>
+                <td><code>type</code>, <code>value</code>, <code>reason</code></td>
+                <td>Admin</td>
+                <td>Block specific keys, HWIDs, or IP ranges globally.</td>
+              </tr>
+              <tr>
+                <td><code>/admin audit</code></td>
+                <td><code>[user]</code>, <code>[action]</code></td>
+                <td>Admin</td>
+                <td>Inspect the 90-day retention system audit trail.</td>
+              </tr>
+              <tr>
+                <td><code>/admin plugin &lt;add|update|remove|list&gt;</code></td>
+                <td>
+                  <code>name</code>, <code>slug</code>, <code>[version]</code>, <code>[desc]</code>
+                </td>
+                <td>Admin</td>
+                <td>Register and configure target Minecraft plugins.</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- API Validation -->
+        <section id="api" class="doc-section">
+          <h1>REST Validation API</h1>
+          <p>
+            Validation requests are managed by Fastify. Exposes a single validation handshake
+            endpoint.
+          </p>
+
+          <h2>Endpoint Structure</h2>
+          <div class="api-card">
+            <span class="api-method post">POST</span>
+            <span class="api-path">/api/v1/validate</span>
+          </div>
+
+          <h3>Request Headers</h3>
+          <pre><code>Content-Type: application/json
+User-Agent: AstroXLicense-Handshake-Java</code></pre>
+
+          <h3>Request Body (JSON)</h3>
+          <div class="code-header">
+            <span>JSON</span>
+            <button
+              class="copy-btn"
+              data-copy='{
+  "licenseKey": "a1b2c3d4-e5f6-7890-abcd-ef1234567890.1a2b3c4d5e6f7g8h",
+  "pluginId": "my-plugin",
+  "serverIp": "192.168.1.100",
+  "hwid": "my-server-hardware-hash-fingerprint"
+}'
+            >
+              Copy
+            </button>
+          </div>
+          <pre><code>{
+  "licenseKey": "a1b2c3d4-e5f6-7890-abcd-ef1234567890.1a2b3c4d5e6f7g8h",
+  "pluginId": "my-plugin",
+  "serverIp": "192.168.1.100",
+  "hwid": "my-server-hardware-hash-fingerprint"
+}</code></pre>
+
+          <h3>Response (Success - 200 OK)</h3>
+          <p>Returns status and short-lived JWT token (expires in 60 seconds).</p>
+          <pre><code>{
+  "status": "valid",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ey..."
+}</code></pre>
+
+          <h3>Response (Rejected - 403 Forbidden)</h3>
+          <p>Returns an obfuscated generic message to prevent verification signature analysis.</p>
+          <pre><code>{
+  "status": "invalid",
+  "error": "License validation failed"
+}</code></pre>
+        </section>
+
+        <!-- HWID Extraction -->
+        <section id="hwid" class="doc-section">
+          <h1>HWID Extraction (Java)</h1>
+          <p>
+            To prevent license duplication, extract the machine's hardware ID. The following utility
+            class gathers UUIDs on Windows, Linux, and macOS platforms.
+          </p>
+
+          <div class="code-header">
+            <span>HWID.java</span>
+            <button class="copy-btn" id="copy-hwid">Copy</button>
+          </div>
+          <pre><code class="language-java">package com.astrox.license.utils;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.Locale;
+
+public class HWID {
+    
+    public static String getHWID() {
+        String os = System.getProperty("os.name").toLowerCase(Locale.ENGLISH);
+        try {
+            if (os.contains("win")) {
+                return getWindowsUUID();
+            } else if (os.contains("nix") || os.contains("nux") || os.contains("aix")) {
+                return getLinuxUUID();
+            } else if (os.contains("mac")) {
+                return getMacUUID();
+            }
+        } catch (Exception e) {
+            return System.getProperty("os.arch") + System.getProperty("os.name") + Runtime.getRuntime().availableProcessors();
+        }
+        return "unknown-hwid";
+    }
+
+    private static String getWindowsUUID() throws Exception {
+        Process process = Runtime.getRuntime().exec("wmic csproduct get uuid");
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.length() > 0 && !line.equalsIgnoreCase("uuid")) {
+                    return line;
+                }
+            }
+        }
+        throw new Exception("Failed to read Windows UUID");
+    }
+
+    private static String getLinuxUUID() throws Exception {
+        Process process = Runtime.getRuntime().exec("cat /var/lib/dbus/machine-id");
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line = reader.readLine();
+            if (line != null) return line.trim();
+        }
+        
+        process = Runtime.getRuntime().exec("cat /sys/class/dmi/id/product_uuid");
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line = reader.readLine();
+            if (line != null) return line.trim();
+        }
+        throw new Exception("Failed to read Linux UUID");
+    }
+
+    private static String getMacUUID() throws Exception {
+        Process process = Runtime.getRuntime().exec("system_profiler SPHardwareDataType");
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.contains("Hardware UUID")) {
+                    return line.split(":")[1].trim();
+                }
+            }
+        }
+        throw new Exception("Failed to read Mac UUID");
+    }
+}</code></pre>
+        </section>
+
+        <!-- Handshake Manager -->
+        <section id="handshake" class="doc-section">
+          <h1>Handshake Manager (Java)</h1>
+          <p>
+            Integrate this manager inside your plugin initialization to run verification tasks
+            asynchronously, cache valid states, and process rate-limiting responses.
+          </p>
+
+          <div class="code-header">
+            <span>LicenseManager.java</span>
+            <button class="copy-btn" id="copy-manager">Copy</button>
+          </div>
+          <pre><code class="language-java">package com.astrox.license;
+
+import com.astrox.license.utils.HWID;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import org.bukkit.plugin.java.JavaPlugin;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+
+public class LicenseManager {
+
+    private final JavaPlugin plugin;
+    private final String apiUrl;
+    private final String licenseKey;
+    private final String pluginId;
+    
+    private String validationToken = null;
+    private long tokenExpiry = 0;
+
+    public LicenseManager(JavaPlugin plugin, String apiUrl, String licenseKey, String pluginId) {
+        this.plugin = plugin;
+        this.apiUrl = apiUrl;
+        this.licenseKey = licenseKey;
+        this.pluginId = pluginId;
+    }
+
+    public boolean isCached() {
+        return validationToken != null && System.currentTimeMillis() < tokenExpiry;
+    }
+
+    public CompletableFuture&lt;Boolean&gt; validate() {
+        if (isCached()) {
+            return CompletableFuture.completedFuture(true);
+        }
+
+        String hwid = HWID.getHWID();
+        String serverIp = "127.0.0.1"; 
+
+        JsonObject body = new JsonObject();
+        body.addProperty("licenseKey", licenseKey);
+        body.addProperty("pluginId", pluginId);
+        body.addProperty("serverIp", serverIp);
+        body.addProperty("hwid", hwid);
+
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(apiUrl + "/api/v1/validate"))
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "AstroXLicense-Handshake-Java")
+                .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
+                .build();
+
+        return client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenApply(response -> {
+                    int status = response.statusCode();
+                    if (status == 200) {
+                        JsonObject resJson = JsonParser.parseString(response.body()).getAsJsonObject();
+                        this.validationToken = resJson.get("token").getAsString();
+                        this.tokenExpiry = System.currentTimeMillis() + 55000;
+                        return true;
+                    } else if (status == 403) {
+                        plugin.getLogger().severe("License key is suspended, revoked, or invalid.");
+                        return false;
+                    } else if (status == 429) {
+                        plugin.getLogger().warning("Rate limit hit. Re-trying with cached credentials.");
+                        return isCached();
+                    }
+                    plugin.getLogger().severe("Handshake server returned unexpected status: " + status);
+                    return false;
+                }).exceptionally(ex -> {
+                    plugin.getLogger().severe("Could not establish connection to the license gateway.");
+                    return false;
+                });
+    }
+}</code></pre>
+        </section>
+
+        <!-- Anti-Crack -->
+        <section id="anti-crack" class="doc-section">
+          <h1>Anti-Crack Best Practices</h1>
+          <p>
+            Protecting the Java codebase requires layering check points since Java bytecode can be
+            easily decompiled and edited.
+          </p>
+
+          <div class="tip-banner">
+            <span class="tip-badge">IMPORTANT</span>
+            <p>
+              Do not store raw URL or endpoint strings in cleartext. Always use simple string
+              encryption or character array assemblies to prevent string scanning attacks.
+            </p>
+          </div>
+
+          <h2>1. Multi-Stage Heartbeats</h2>
+          <p>
+            Never rely solely on startup checks. Implement an asynchronous scheduler verifying token
+            states at random intervals during runtime.
+          </p>
+          <pre><code>// Schedule check every 10 minutes (12,000 ticks)
+Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
+    manager.validate().thenAccept(ok -> {
+        if (!ok) {
+            Bukkit.getScheduler().runTask(plugin, () -> Bukkit.shutdown());
+        }
+    });
+}, 12000L, 12000L);</code></pre>
+
+          <h2>2. Obfuscation Targets</h2>
+          <p>
+            Ensure your class files run through a bytecode optimizer. Rename licensing classes, and
+            strip debug attributes (source file details, line numbers) from compilation jars.
+          </p>
+        </section>
+      </main>
+    </div>
+
+    <!-- Footer -->
+    <footer class="doc-footer">
+      <p>&copy; 2026 AstroX License. Protected under Ironclad security assessments.</p>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

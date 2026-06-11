@@ -1,0 +1,104 @@
+{
+  "_comment": "Pterodactyl Egg Export for AstroX License",
+  "meta": {
+    "version": "PTDL_v2",
+    "update_url": null
+  },
+  "exported_at": "2026-06-12T04:48:00+07:00",
+  "name": "AstroX License Bot",
+  "author": "silas@astrox.net",
+  "description": "Production-grade licensing Discord bot and REST validate server for Minecraft plugins.",
+  "features": null,
+  "docker_images": {
+    "NodeJS 25": "ghcr.io/parkervcp/eggs:nodejs_25"
+  },
+  "file_denylist": [],
+  "startup": "if [ ! -f .env ]; then touch .env; fi && if [ -f package.json ]; then npm install && npm start; else echo \"Missing package.json\"; exit 1; fi",
+  "config": {
+    "files": "{\r\n    \".env\": {\r\n        \"parser\": \"properties\",\r\n        \"find\": {\r\n            \"BOT_TOKEN\": \"{{server.build.env.BOT_TOKEN}}\",\r\n            \"CLIENT_ID\": \"{{server.build.env.CLIENT_ID}}\",\r\n            \"GUILD_ID\": \"{{server.build.env.GUILD_ID}}\",\r\n            \"ADMIN_ROLE_ID\": \"{{server.build.env.ADMIN_ROLE_ID}}\",\r\n            \"MONGODB_URI\": \"{{server.build.env.MONGODB_URI}}\",\r\n            \"HMAC_SECRET\": \"{{server.build.env.HMAC_SECRET}}\",\r\n            \"API_PORT\": \"{{server.build.env.API_PORT}}\",\r\n            \"NODE_ENV\": \"{{server.build.env.NODE_ENV}}\"\r\n        }\r\n    }\r\n}",
+    "startup": "{\r\n    \"done\": \"Bot is online\"\r\n}",
+    "logs": "{}",
+    "stop": "^C"
+  },
+  "scripts": {
+    "installation": {
+      "container": "ghcr.io/parkervcp/installers:debian",
+      "entrypoint": "bash",
+      "script": "#!/bin/bash\r\n# Installation script for AstroX License\r\napt update && apt install -y git curl\r\nnpm install -g pnpm\r\npnpm --version"
+    }
+  },
+  "variables": [
+    {
+      "name": "Discord Bot Token",
+      "description": "The token for authentication with the Discord Gateway.",
+      "env_variable": "BOT_TOKEN",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string"
+    },
+    {
+      "name": "Discord Client ID",
+      "description": "The Application / Client ID for your Discord Bot.",
+      "env_variable": "CLIENT_ID",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string"
+    },
+    {
+      "name": "Guild ID",
+      "description": "Target Discord Server ID for command registration.",
+      "env_variable": "GUILD_ID",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string"
+    },
+    {
+      "name": "Admin Role ID",
+      "description": "Role allowed to execute admin-level slash commands.",
+      "env_variable": "ADMIN_ROLE_ID",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string"
+    },
+    {
+      "name": "MongoDB URI",
+      "description": "Connection string for the MongoDB instance.",
+      "env_variable": "MONGODB_URI",
+      "default_value": "mongodb://127.0.0.1:27017/astrox-license",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string"
+    },
+    {
+      "name": "HMAC Secret",
+      "description": "Min 32 character cryptographic key for signature signing.",
+      "env_variable": "HMAC_SECRET",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|min:32"
+    },
+    {
+      "name": "API Listen Port",
+      "description": "The port the Fastify validate handshake server listens on.",
+      "env_variable": "API_PORT",
+      "default_value": "3000",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|numeric|digits_between:1,5"
+    },
+    {
+      "name": "Environment Mode",
+      "description": "Environment mode (production or development).",
+      "env_variable": "NODE_ENV",
+      "default_value": "production",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|in:production,development"
+    }
+  ]
+}

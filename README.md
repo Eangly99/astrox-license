@@ -1,6 +1,6 @@
 # AstroX License
 
-A production-grade, high-performance Discord bot and REST API for managing, verifying, and distributing licenses for Minecraft plugins (Spigot/Paper). Built using Node.js (v23+) and Discord.js v14.
+A high-performance Discord bot and REST API for managing, verifying, and distributing licenses for Minecraft plugins (Spigot/Paper). Built using Node.js (v23+) and Discord.js v14.
 
 ---
 

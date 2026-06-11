@@ -11,6 +11,7 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "deploy": "node src/bot/deploy-commands.js",
+    "serve:docs": "npx http-server docs -p 8080",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

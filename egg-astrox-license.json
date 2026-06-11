@@ -10,7 +10,7 @@
   "description": "Production-grade licensing Discord bot and REST validate server for Minecraft plugins.",
   "features": null,
   "docker_images": {
-    "NodeJS 25": "ghcr.io/parkervcp/eggs:nodejs_25"
+    "NodeJS 23": "ghcr.io/parkervcp/eggs:nodejs_23"
   },
   "file_denylist": [],
   "startup": "if [ ! -f .env ]; then touch .env; fi && if [ -f package.json ]; then npm install && npm start; else echo \"Missing package.json\"; exit 1; fi",

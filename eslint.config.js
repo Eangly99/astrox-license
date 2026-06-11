@@ -48,6 +48,12 @@ export default [
     },
   },
   {
-    ignores: ['node_modules/**', 'coverage/**', 'dist/**'],
+    ignores: [
+      'node_modules/**',
+      'coverage/**',
+      'dist/**',
+      'docs/.vitepress/dist/**',
+      'docs/.vitepress/cache/**',
+    ],
   },
 ];

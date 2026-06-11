@@ -1,4 +1,4 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
 import { revokeLicense, getLicenseByKey, listLicenses } from '../../services/licenseService.js';
 import { createLogger } from '../../utils/logger.js';
 import { createSuccessEmbed, createErrorEmbed } from '../embeds/commonEmbeds.js';
@@ -26,7 +26,7 @@ export async function handleButton(interaction) {
         'Action Expired',
         'The pending revocation action could not be found or has expired.',
       );
-      return await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+      return await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
     }
 
     try {
@@ -44,7 +44,7 @@ export async function handleButton(interaction) {
         'Operation Failed',
         'Could not complete the license revocation.',
       );
-      await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+      await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
     }
     return;
   }
@@ -68,18 +68,18 @@ export async function handleButton(interaction) {
       const license = await getLicenseByKey(key);
       if (!license) {
         const errorEmbed = createErrorEmbed('Not Found', 'This license key no longer exists.');
-        return await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        return await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
       }
 
       const embed = createLicenseEmbed(license);
-      await interaction.reply({ embeds: [embed], ephemeral: true });
+      await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     } catch (err) {
       log.error({ err }, 'Failed to query license status from button click');
       const errorEmbed = createErrorEmbed(
         'Error',
         'Unable to retrieve license details at this time.',
       );
-      await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+      await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
     }
     return;
   }

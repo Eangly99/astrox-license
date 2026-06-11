@@ -1,3 +1,4 @@
+import { MessageFlags } from 'discord.js';
 import { createLogger } from '../../utils/logger.js';
 import { createSuccessEmbed } from '../embeds/commonEmbeds.js';
 
@@ -18,7 +19,7 @@ export async function handleSelect(interaction) {
       'Plugins Selected',
       `You selected the following items:\n${values.map((v) => `• \`${v}\``).join('\n')}`,
     );
-    return await interaction.reply({ embeds: [embed], ephemeral: true });
+    return await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   }
 
   log.warn({ customId }, 'Unrouted select menu interaction');

@@ -1,4 +1,4 @@
-import { Events, Collection } from 'discord.js';
+import { Events, Collection, MessageFlags } from 'discord.js';
 import { config } from '../../utils/config.js';
 import { createLogger } from '../../utils/logger.js';
 import { createErrorEmbed } from '../embeds/commonEmbeds.js';
@@ -53,7 +53,7 @@ export async function execute(interaction) {
           'Access Denied',
           'You do not have the required permissions or administrator role to execute this command.',
         );
-        return await interaction.reply({ embeds: [embed], ephemeral: true });
+        return await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       }
 
       // Cooldown implementation
@@ -72,7 +72,7 @@ export async function execute(interaction) {
           const expiredTimestamp = Math.round(expirationTime / 1000);
           return await interaction.reply({
             content: `Rate limit hit. You can use this command again <t:${expiredTimestamp}:R>.`,
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         }
       }
@@ -127,9 +127,9 @@ export async function execute(interaction) {
 
     try {
       if (interaction.deferred || interaction.replied) {
-        await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
+        await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
       } else {
-        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
       }
     } catch (sendError) {
       log.error({ err: sendError }, 'Failed to transmit error message fallback');

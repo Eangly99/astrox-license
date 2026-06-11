@@ -1,4 +1,4 @@
-import { inlineCode } from 'discord.js';
+import { inlineCode, MessageFlags } from 'discord.js';
 import Plugin from '../../db/models/Plugin.js';
 import { createLicense } from '../../services/licenseService.js';
 import { createLogger } from '../../utils/logger.js';
@@ -14,7 +14,7 @@ const log = createLogger('license-modal');
 export async function handleModal(interaction) {
   if (interaction.customId !== 'bulk_generate_modal') return;
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const pluginSlug = interaction.fields.getTextInputValue('plugin_slug').trim().toLowerCase();
   const rawUserIds = interaction.fields.getTextInputValue('user_ids');

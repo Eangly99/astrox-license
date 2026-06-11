@@ -1,11 +1,9 @@
-import {
-  SlashCommandBuilder,
+import { SlashCommandBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   bold,
-  inlineCode,
-} from 'discord.js';
+  inlineCode, MessageFlags } from 'discord.js';
 import Blacklist from '../../db/models/Blacklist.js';
 import AuditLog from '../../db/models/AuditLog.js';
 import Plugin from '../../db/models/Plugin.js';
@@ -187,13 +185,13 @@ export async function execute(interaction) {
     try {
       const stats = await getStats();
       const embed = createStatsEmbed(stats);
-      await interaction.reply({ embeds: [embed], ephemeral: true });
+      await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     } catch {
       const errEmbed = createErrorEmbed(
         'Statistics Error',
         'Failed to calculate system statistics.',
       );
-      await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+      await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
     }
     return;
   }
@@ -230,10 +228,10 @@ export async function execute(interaction) {
           .setDisabled(page >= totalPages),
       );
 
-      await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+      await interaction.reply({ embeds: [embed], components: [row], flags: MessageFlags.Ephemeral });
     } catch {
       const errEmbed = createErrorEmbed('Query Failed', 'Failed to retrieve audit log registry.');
-      await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+      await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
     }
     return;
   }
@@ -248,7 +246,7 @@ export async function execute(interaction) {
       const validation = blacklistAddSchema.safeParse({ type, value, reason });
       if (!validation.success) {
         const errEmbed = createErrorEmbed('Validation Failed', 'Provided inputs are invalid.');
-        return await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+        return await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
       }
 
       try {
@@ -268,11 +266,11 @@ export async function execute(interaction) {
           'Blacklisted Successfully',
           `Blocked ${type.toUpperCase()}: \`${value}\`\nReason: ${reason}`,
         );
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+        await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       } catch (err) {
         const msg = err.code === 11000 ? 'This item is already blacklisted.' : err.message;
         const errEmbed = createErrorEmbed('Operation Failed', msg);
-        await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+        await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
       }
       return;
     }
@@ -288,7 +286,7 @@ export async function execute(interaction) {
             'Not Found',
             'No blacklist entry matches those parameters.',
           );
-          return await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+          return await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
         }
 
         await AuditLog.log(
@@ -305,10 +303,10 @@ export async function execute(interaction) {
           'Blacklist Entry Removed',
           `Removed block on ${type.toUpperCase()}: \`${value}\``,
         );
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+        await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       } catch (err) {
         const errEmbed = createErrorEmbed('Operation Failed', err.message);
-        await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+        await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
       }
       return;
     }
@@ -317,13 +315,13 @@ export async function execute(interaction) {
       try {
         const list = await Blacklist.find().sort({ createdAt: -1 }).lean();
         const embed = createBlacklistEmbed(list);
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+        await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       } catch {
         const errEmbed = createErrorEmbed(
           'Query Failed',
           'Unable to retrieve blacklist directory.',
         );
-        await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+        await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
       }
     }
     return;
@@ -350,7 +348,7 @@ export async function execute(interaction) {
           'Validation Failed',
           'Inputs are invalid. Check slug requirements (lowercase, alphanumeric, dashes).',
         );
-        return await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+        return await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
       }
 
       try {
@@ -367,12 +365,12 @@ export async function execute(interaction) {
           'Plugin Registered',
           `Successfully registered plugin ${bold(plugin.name)} (${inlineCode(plugin.slug)})`,
         );
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+        await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       } catch (err) {
         const msg =
           err.code === 11000 ? 'A plugin with this slug is already registered.' : err.message;
         const errEmbed = createErrorEmbed('Operation Failed', msg);
-        await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+        await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
       }
       return;
     }
@@ -391,7 +389,7 @@ export async function execute(interaction) {
             'Not Found',
             'No registered plugin found matching that slug.',
           );
-          return await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+          return await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
         }
 
         if (name) plugin.name = name.trim();
@@ -405,10 +403,10 @@ export async function execute(interaction) {
           'Plugin Updated',
           `Successfully updated configuration for plugin ${bold(plugin.name)}.`,
         );
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+        await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       } catch (err) {
         const errEmbed = createErrorEmbed('Operation Failed', err.message);
-        await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+        await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
       }
       return;
     }
@@ -423,7 +421,7 @@ export async function execute(interaction) {
             'Not Found',
             'No registered plugin found matching that slug.',
           );
-          return await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+          return await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
         }
 
         const activeLicensesCount = await License.countDocuments({ pluginId: plugin._id });
@@ -434,7 +432,7 @@ export async function execute(interaction) {
               activeLicensesCount.toString(),
             )} active licenses associated with this plugin.\n\nRevoke or reassign those licenses first.`,
           );
-          return await interaction.reply({ embeds: [warnEmbed], ephemeral: true });
+          return await interaction.reply({ embeds: [warnEmbed], flags: MessageFlags.Ephemeral });
         }
 
         await Plugin.findByIdAndDelete(plugin._id);
@@ -443,10 +441,10 @@ export async function execute(interaction) {
           'Plugin Unregistered',
           `Successfully removed plugin ${bold(plugin.name)} from database.`,
         );
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+        await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       } catch (err) {
         const errEmbed = createErrorEmbed('Operation Failed', err.message);
-        await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+        await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
       }
       return;
     }
@@ -459,7 +457,7 @@ export async function execute(interaction) {
             'Empty Registry',
             'No plugins are currently registered.',
           );
-          return await interaction.reply({ embeds: [embed], ephemeral: true });
+          return await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
         }
 
         const lines = list.map((p, index) => {
@@ -467,10 +465,10 @@ export async function execute(interaction) {
         });
 
         const embed = createSuccessEmbed('Registered Plugins Directory', lines.join('\n'));
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+        await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       } catch {
         const errEmbed = createErrorEmbed('Query Failed', 'Failed to retrieve plugin listings.');
-        await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+        await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
       }
     }
   }

@@ -1,4 +1,5 @@
 export default {
+  base: '/astrox-license/',
   title: 'AstroX License',
   description: 'Developer Wiki & Documentation',
   themeConfig: {

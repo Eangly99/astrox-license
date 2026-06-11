@@ -6,15 +6,21 @@
     <title>AstroX License — Developer Wiki & Docs</title>
     <meta
       name="description"
-      content="Official documentation and integration guide for AstroX License Discord bot and handshake REST API."
+      content="Official developer wiki and integration guide for AstroX License Discord bot and handshake REST API."
     />
-    <!-- Google Fonts -->
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap"
       rel="stylesheet"
     />
+    <!-- Highlight.js for Syntax Highlighting -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <link rel="stylesheet" href="index.css" />
   </head>
   <body>
@@ -22,11 +28,29 @@
     <header class="navbar">
       <div class="nav-container">
         <div class="logo">
+          <div class="logo-symbol">⚡</div>
           <span class="logo-glow">AstroX</span>
           <span class="logo-text">License</span>
         </div>
         <div class="search-container">
-          <input type="text" id="search-input" placeholder="Search documentation..." />
+          <svg
+            class="search-icon"
+            viewBox="0 0 24 24"
+            width="18"
+            height="18"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input
+            type="text"
+            id="search-input"
+            placeholder="Search documentation..."
+            aria-label="Search"
+          />
           <span class="search-kbd">/</span>
         </div>
         <button class="mobile-toggle" id="menu-toggle" aria-label="Toggle Menu">
@@ -49,7 +73,7 @@
     </header>
 
     <div class="layout-container">
-      <!-- Sidebar Navigation -->
+      <!-- Left Sidebar Navigation -->
       <aside class="sidebar" id="sidebar">
         <nav class="nav-menu">
           <div class="nav-group">
@@ -74,27 +98,35 @@
         </nav>
       </aside>
 
-      <!-- Main Content -->
-      <main class="content">
+      <!-- Center Main Reading Panel -->
+      <main class="content-pane">
+        <div class="hero-block">
+          <span class="version-badge">v1.0.0</span>
+          <h1>AstroX License Documentation</h1>
+          <p class="hero-subtitle">
+            A production-grade, cryptographically secure licensing framework for Minecraft plugins
+            (Spigot/Paper).
+          </p>
+        </div>
+
         <!-- Introduction -->
         <section id="intro" class="doc-section">
-          <h1>Introduction</h1>
-          <p class="lead">
-            AstroX License is a production-grade, high-performance license management system
-            designed for Minecraft plugins (Spigot/Paper).
+          <h2>Introduction</h2>
+          <p>
+            AstroX License combines an interactive self-service Discord bot with a secure Fastify
+            REST API, allowing plugin developers to distribute, verify, and manage licenses with
+            zero friction.
           </p>
           <p>
-            By combining an interactive self-service Discord bot with a secure Fastify REST API,
-            AstroX License allows plugin developers to distribute, verify, and manage licenses with
-            zero friction. The system binds licenses cryptographically to server hardware
-            fingerprints on first use, features IP rate-limiting, and automatically suspends shared
-            licenses performing concurrent handshakes from multiple networks.
+            The system binds licenses cryptographically to server hardware fingerprints (HWID) on
+            first use, features IP rate-limiting, and automatically suspends shared licenses
+            performing concurrent handshakes from multiple networks.
           </p>
 
           <div class="card-grid">
             <div class="feature-card">
               <div class="feature-icon glow-purple">🔑</div>
-              <h3>HMAC Signatures</h3>
+              <h4>HMAC Signatures</h4>
               <p>
                 License keys are signed cryptographically using timing-safe SHA-256 HMAC prefixes to
                 eliminate key-forging attempts.
@@ -102,18 +134,18 @@
             </div>
             <div class="feature-card">
               <div class="feature-icon glow-green">🔒</div>
-              <h3>HWID Lock</h3>
+              <h4>HWID Lock</h4>
               <p>
                 Locks licenses to hardware fingerprints dynamically on first use, blocking
-                unauthorized duplication.
+                unauthorized duplication or redistributions.
               </p>
             </div>
             <div class="feature-card">
               <div class="feature-icon glow-red">📡</div>
-              <h3>Shared Protection</h3>
+              <h4>Shared Protection</h4>
               <p>
                 Automatically flags and suspends licenses performing validation handshakes from >3
-                unique IPs in 24 hours.
+                unique IPs in a 24-hour window.
               </p>
             </div>
           </div>
@@ -121,193 +153,223 @@
 
         <!-- Setup & Deploy -->
         <section id="setup" class="doc-section">
-          <h1>Setup & Deployment</h1>
+          <h2>Setup & Deployment</h2>
           <p>
             Deploy AstroX License on your VPS, hosting node, or directly inside Pterodactyl Panel
             using Node.js v23+.
           </p>
 
-          <h2>Prerequisites</h2>
-          <ul>
-            <li>Node.js 23.0.0+</li>
-            <li>MongoDB (Local instance or Atlas connection)</li>
-            <li>Redis (Optional, for validation cache sharing)</li>
-            <li>pnpm or npm package manager</li>
-          </ul>
+          <h3>Prerequisites</h3>
+          <div class="prereq-card">
+            <ul>
+              <li><strong>Node.js</strong>: Version 23.0.0 or higher</li>
+              <li><strong>Database</strong>: MongoDB (Local instance or Atlas cloud cluster)</li>
+              <li><strong>Caching</strong>: Keyv (In-memory default or Redis cache sharing)</li>
+              <li><strong>Package Manager</strong>: pnpm or npm</li>
+            </ul>
+          </div>
 
-          <h2>Configuration (.env)</h2>
+          <h3>Configuration (.env)</h3>
           <p>Configure environment variables by cloning the template file:</p>
-          <div class="code-header">
-            <span>Bash</span>
-            <button class="copy-btn" data-copy="cp .env.example .env">Copy</button>
-          </div>
-          <pre><code>cp .env.example .env</code></pre>
 
-          <h2>Registering Slash Commands</h2>
+          <div class="code-wrapper">
+            <div class="code-header">
+              <span class="file-name">Terminal</span>
+              <button class="copy-btn" data-copy="cp .env.example .env">Copy</button>
+            </div>
+            <pre><code class="language-bash">cp .env.example .env</code></pre>
+          </div>
+
+          <h3>Registering Slash Commands</h3>
           <p>Command schemas must be registered to the Discord Gateway before boot:</p>
-          <div class="code-header">
-            <span>Bash</span>
-            <button class="copy-btn" data-copy="npm run deploy">Copy</button>
+          <div class="code-wrapper">
+            <div class="code-header">
+              <span class="file-name">Terminal</span>
+              <button class="copy-btn" data-copy="npm run deploy">Copy</button>
+            </div>
+            <pre><code class="language-bash">npm run deploy</code></pre>
           </div>
-          <pre><code>npm run deploy</code></pre>
 
-          <h2>Starting the Service</h2>
-          <div class="code-header">
-            <span>Bash</span>
-            <button class="copy-btn" data-copy="npm start">Copy</button>
+          <h3>Starting the Service</h3>
+          <div class="code-wrapper">
+            <div class="code-header">
+              <span class="file-name">Terminal</span>
+              <button class="copy-btn" data-copy="npm start">Copy</button>
+            </div>
+            <pre><code class="language-bash">npm start</code></pre>
           </div>
-          <pre><code>npm start</code></pre>
         </section>
 
         <!-- Slash Commands -->
         <section id="commands" class="doc-section">
-          <h1>Slash Command Suite</h1>
+          <h2>Slash Command Suite</h2>
           <p>
-            The system consolidates interactions into two high-performance root commands:
-            <code>/license</code> and <code>/admin</code>.
+            The system consolidates interactions into three high-performance root commands:
+            <code>/license</code>, <code>/mylicense</code>, and <code>/admin</code>.
           </p>
 
-          <table class="doc-table">
-            <thead>
-              <tr>
-                <th>Command</th>
-                <th>Arguments</th>
-                <th>Access</th>
-                <th>Description</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><code>/license generate</code></td>
-                <td>
-                  <code>plugin</code>, <code>user</code>, <code>type</code>,
-                  <code>[duration]</code>, <code>[max-ips]</code>
-                </td>
-                <td>Staff / Role</td>
-                <td>Create UUID-HMAC license keys.</td>
-              </tr>
-              <tr>
-                <td><code>/license verify</code></td>
-                <td><code>key</code></td>
-                <td>All staff</td>
-                <td>View detailed status and bindings with checking buttons.</td>
-              </tr>
-              <tr>
-                <td><code>/license list</code></td>
-                <td><code>[user]</code>, <code>[plugin]</code>, <code>[status]</code></td>
-                <td>All staff</td>
-                <td>List licenses with filters and pagination.</td>
-              </tr>
-              <tr>
-                <td><code>/license transfer</code></td>
-                <td><code>key</code>, <code>new-owner</code></td>
-                <td>All staff</td>
-                <td>Transfer ownership, resetting HWID/IP locks.</td>
-              </tr>
-              <tr>
-                <td><code>/license revoke</code></td>
-                <td><code>key</code>, <code>[reason]</code></td>
-                <td>Admin</td>
-                <td>Deactivates a license key permanently (confirm dialog).</td>
-              </tr>
-              <tr>
-                <td><code>/admin stats</code></td>
-                <td>None</td>
-                <td>Admin</td>
-                <td>Dashboard metrics panel displaying system load counts.</td>
-              </tr>
-              <tr>
-                <td><code>/admin blacklist &lt;add|remove|list&gt;</code></td>
-                <td><code>type</code>, <code>value</code>, <code>reason</code></td>
-                <td>Admin</td>
-                <td>Block specific keys, HWIDs, or IP ranges globally.</td>
-              </tr>
-              <tr>
-                <td><code>/admin audit</code></td>
-                <td><code>[user]</code>, <code>[action]</code></td>
-                <td>Admin</td>
-                <td>Inspect the 90-day retention system audit trail.</td>
-              </tr>
-              <tr>
-                <td><code>/admin plugin &lt;add|update|remove|list&gt;</code></td>
-                <td>
-                  <code>name</code>, <code>slug</code>, <code>[version]</code>, <code>[desc]</code>
-                </td>
-                <td>Admin</td>
-                <td>Register and configure target Minecraft plugins.</td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="table-container">
+            <table class="doc-table">
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Arguments</th>
+                  <th>Access</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>/license generate</code></td>
+                  <td>
+                    <code>plugin</code>, <code>user</code>, <code>type</code>,
+                    <code>[duration]</code>, <code>[max-ips]</code>
+                  </td>
+                  <td>Admin / Staff</td>
+                  <td>Create UUID-HMAC license keys.</td>
+                </tr>
+                <tr>
+                  <td><code>/license verify</code></td>
+                  <td><code>key</code></td>
+                  <td>Admin / Staff</td>
+                  <td>View detailed status and bindings with status buttons.</td>
+                </tr>
+                <tr>
+                  <td><code>/license list</code></td>
+                  <td><code>[user]</code>, <code>[plugin]</code>, <code>[status]</code></td>
+                  <td>Admin / Staff</td>
+                  <td>List licenses with filters and pagination.</td>
+                </tr>
+                <tr>
+                  <td><code>/license transfer</code></td>
+                  <td><code>key</code>, <code>new-owner</code></td>
+                  <td>Admin / Staff</td>
+                  <td>Transfer ownership, resetting HWID/IP locks.</td>
+                </tr>
+                <tr>
+                  <td><code>/license revoke</code></td>
+                  <td><code>key</code>, <code>[reason]</code></td>
+                  <td>Admin / Staff</td>
+                  <td>Deactivates a license key permanently (confirm dialog).</td>
+                </tr>
+                <tr>
+                  <td><code>/mylicense</code></td>
+                  <td>None</td>
+                  <td>All Users</td>
+                  <td>View owned licenses, copy full keys, and self-manage whitelisted IPs.</td>
+                </tr>
+                <tr>
+                  <td><code>/admin stats</code></td>
+                  <td>None</td>
+                  <td>Admin</td>
+                  <td>Dashboard metrics panel displaying system load counts.</td>
+                </tr>
+                <tr>
+                  <td><code>/admin blacklist &lt;add|remove|list&gt;</code></td>
+                  <td><code>type</code>, <code>value</code>, <code>reason</code></td>
+                  <td>Admin</td>
+                  <td>Block specific keys, HWIDs, or IP ranges globally.</td>
+                </tr>
+                <tr>
+                  <td><code>/admin audit</code></td>
+                  <td><code>[user]</code>, <code>[action]</code></td>
+                  <td>Admin</td>
+                  <td>Inspect the 90-day retention system audit trail.</td>
+                </tr>
+                <tr>
+                  <td><code>/admin plugin &lt;add|update|remove|list&gt;</code></td>
+                  <td>
+                    <code>name</code>, <code>slug</code>, <code>[version]</code>,
+                    <code>[desc]</code>
+                  </td>
+                  <td>Admin</td>
+                  <td>Register and configure target Minecraft plugins.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <!-- API Validation -->
         <section id="api" class="doc-section">
-          <h1>REST Validation API</h1>
+          <h2>REST Validation API</h2>
           <p>
             Validation requests are managed by Fastify. Exposes a single validation handshake
             endpoint.
           </p>
 
-          <h2>Endpoint Structure</h2>
           <div class="api-card">
-            <span class="api-method post">POST</span>
+            <span class="api-method">POST</span>
             <span class="api-path">/api/v1/validate</span>
           </div>
 
           <h3>Request Headers</h3>
-          <pre><code>Content-Type: application/json
+          <div class="code-wrapper">
+            <div class="code-header">
+              <span class="file-name">HTTP Headers</span>
+            </div>
+            <pre><code class="language-http">Content-Type: application/json
 User-Agent: AstroXLicense-Handshake-Java</code></pre>
+          </div>
 
           <h3>Request Body (JSON)</h3>
-          <div class="code-header">
-            <span>JSON</span>
-            <button
-              class="copy-btn"
-              data-copy='{
-  "licenseKey": "a1b2c3d4-e5f6-7890-abcd-ef1234567890.1a2b3c4d5e6f7g8h",
-  "pluginId": "my-plugin",
-  "serverIp": "192.168.1.100",
-  "hwid": "my-server-hardware-hash-fingerprint"
-}'
-            >
-              Copy
-            </button>
-          </div>
-          <pre><code>{
+          <div class="code-wrapper">
+            <div class="code-header">
+              <span class="file-name">JSON Request Payload</span>
+              <button
+                class="copy-btn"
+                data-copy='{"licenseKey": "a1b2c3d4-e5f6-7890-abcd-ef1234567890.1a2b3c4d5e6f7g8h", "pluginId": "my-plugin", "serverIp": "192.168.1.100", "hwid": "my-server-hardware-hash-fingerprint"}'
+              >
+                Copy
+              </button>
+            </div>
+            <pre><code class="language-json">{
   "licenseKey": "a1b2c3d4-e5f6-7890-abcd-ef1234567890.1a2b3c4d5e6f7g8h",
   "pluginId": "my-plugin",
   "serverIp": "192.168.1.100",
   "hwid": "my-server-hardware-hash-fingerprint"
 }</code></pre>
+          </div>
 
           <h3>Response (Success - 200 OK)</h3>
-          <p>Returns status and short-lived JWT token (expires in 60 seconds).</p>
-          <pre><code>{
+          <p>Returns validation token (JWT expires in 60s) allowing local verify cache.</p>
+          <div class="code-wrapper">
+            <div class="code-header">
+              <span class="file-name">JSON Response</span>
+            </div>
+            <pre><code class="language-json">{
   "status": "valid",
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ey..."
 }</code></pre>
+          </div>
 
           <h3>Response (Rejected - 403 Forbidden)</h3>
-          <p>Returns an obfuscated generic message to prevent verification signature analysis.</p>
-          <pre><code>{
+          <p>Returns an obfuscated generic error to prevent verification signature analysis.</p>
+          <div class="code-wrapper">
+            <div class="code-header">
+              <span class="file-name">JSON Response</span>
+            </div>
+            <pre><code class="language-json">{
   "status": "invalid",
   "error": "License validation failed"
 }</code></pre>
+          </div>
         </section>
 
         <!-- HWID Extraction -->
         <section id="hwid" class="doc-section">
-          <h1>HWID Extraction (Java)</h1>
+          <h2>HWID Extraction (Java)</h2>
           <p>
             To prevent license duplication, extract the machine's hardware ID. The following utility
             class gathers UUIDs on Windows, Linux, and macOS platforms.
           </p>
 
-          <div class="code-header">
-            <span>HWID.java</span>
-            <button class="copy-btn" id="copy-hwid">Copy</button>
-          </div>
-          <pre><code class="language-java">package com.astrox.license.utils;
+          <div class="code-wrapper">
+            <div class="code-header">
+              <span class="file-name">HWID.java</span>
+              <button class="copy-btn" id="copy-hwid">Copy</button>
+            </div>
+            <pre><code class="language-java">package com.astrox.license.utils;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -373,21 +435,23 @@ public class HWID {
         throw new Exception("Failed to read Mac UUID");
     }
 }</code></pre>
+          </div>
         </section>
 
         <!-- Handshake Manager -->
         <section id="handshake" class="doc-section">
-          <h1>Handshake Manager (Java)</h1>
+          <h2>Handshake Manager (Java)</h2>
           <p>
             Integrate this manager inside your plugin initialization to run verification tasks
             asynchronously, cache valid states, and process rate-limiting responses.
           </p>
 
-          <div class="code-header">
-            <span>LicenseManager.java</span>
-            <button class="copy-btn" id="copy-manager">Copy</button>
-          </div>
-          <pre><code class="language-java">package com.astrox.license;
+          <div class="code-wrapper">
+            <div class="code-header">
+              <span class="file-name">LicenseManager.java</span>
+              <button class="copy-btn" id="copy-manager">Copy</button>
+            </div>
+            <pre><code class="language-java">package com.astrox.license;
 
 import com.astrox.license.utils.HWID;
 import com.google.gson.JsonObject;
@@ -419,7 +483,7 @@ public class LicenseManager {
     }
 
     public boolean isCached() {
-        return validationToken != null && System.currentTimeMillis() < tokenExpiry;
+        return validationToken != null && System.currentTimeMillis() &lt; tokenExpiry;
     }
 
     public CompletableFuture&lt;Boolean&gt; validate() {
@@ -470,50 +534,81 @@ public class LicenseManager {
                 });
     }
 }</code></pre>
+          </div>
         </section>
 
         <!-- Anti-Crack -->
         <section id="anti-crack" class="doc-section">
-          <h1>Anti-Crack Best Practices</h1>
+          <h2>Anti-Crack Security</h2>
           <p>
             Protecting the Java codebase requires layering check points since Java bytecode can be
             easily decompiled and edited.
           </p>
 
-          <div class="tip-banner">
-            <span class="tip-badge">IMPORTANT</span>
-            <p>
-              Do not store raw URL or endpoint strings in cleartext. Always use simple string
-              encryption or character array assemblies to prevent string scanning attacks.
-            </p>
+          <div class="callout-important">
+            <div class="callout-icon">⚠️</div>
+            <div class="callout-body">
+              <h5>IMPORTANT SECURITY ADVISORY</h5>
+              <p>
+                Do not store raw URL or endpoint strings in cleartext. Always use string encryption
+                (e.g. XOR) or build them at runtime using character arrays to prevent automated
+                string scanning tools from discovering your licensing server.
+              </p>
+            </div>
           </div>
 
-          <h2>1. Multi-Stage Heartbeats</h2>
+          <h3>1. Multi-Stage Heartbeats</h3>
           <p>
             Never rely solely on startup checks. Implement an asynchronous scheduler verifying token
             states at random intervals during runtime.
           </p>
-          <pre><code>// Schedule check every 10 minutes (12,000 ticks)
+          <div class="code-wrapper">
+            <div class="code-header">
+              <span class="file-name">Scheduler Block</span>
+            </div>
+            <pre><code class="language-java">// Schedule checks at randomized runtimes (e.g., check every 10-15 mins)
 Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
     manager.validate().thenAccept(ok -> {
         if (!ok) {
-            Bukkit.getScheduler().runTask(plugin, () -> Bukkit.shutdown());
+            plugin.getLogger().severe("License validation failed. Shutting down plugin functions...");
+            Bukkit.getScheduler().runTask(plugin, () -> Bukkit.getPluginManager().disablePlugin(plugin));
         }
     });
 }, 12000L, 12000L);</code></pre>
+          </div>
 
-          <h2>2. Obfuscation Targets</h2>
+          <h3>2. Obfuscation & Bytecode Guards</h3>
           <p>
-            Ensure your class files run through a bytecode optimizer. Rename licensing classes, and
-            strip debug attributes (source file details, line numbers) from compilation jars.
+            Ensure your class files run through a bytecode optimizer (e.g., ProGuard or Zelix
+            KlassMaster). Rename licensing classes, and strip debug attributes (source file details,
+            line numbers) from compilation jars to make manual reversing extremely tedious.
           </p>
         </section>
       </main>
+
+      <!-- Right Sidebar Table of Contents -->
+      <aside class="toc-pane">
+        <div class="toc-container">
+          <span class="toc-title">On this page</span>
+          <ul class="toc-links" id="toc-list">
+            <li><a href="#intro" class="toc-link active">Introduction</a></li>
+            <li><a href="#setup" class="toc-link">Setup & Deploy</a></li>
+            <li><a href="#commands" class="toc-link">Slash Commands</a></li>
+            <li><a href="#api" class="toc-link">Validation API</a></li>
+            <li><a href="#hwid" class="toc-link">HWID Extraction</a></li>
+            <li><a href="#handshake" class="toc-link">Handshake Manager</a></li>
+            <li><a href="#anti-crack" class="toc-link">Anti-Crack Security</a></li>
+          </ul>
+        </div>
+      </aside>
     </div>
 
     <!-- Footer -->
     <footer class="doc-footer">
-      <p>&copy; 2026 AstroX License. Protected under Ironclad security assessments.</p>
+      <div class="footer-container">
+        <p>&copy; 2026 AstroX License. Protected under Ironclad security assessments.</p>
+        <div class="footer-badge">SECURE HANDSHAKE PIPELINE</div>
+      </div>
     </footer>
 
     <script src="app.js"></script>

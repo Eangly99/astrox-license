@@ -1,6 +1,8 @@
 import dotenvFlow from 'dotenv-flow';
 import * as z from 'zod';
 
+process.env.TZ = 'Asia/Phnom_Penh';
+
 dotenvFlow.config({ silent: true });
 
 const envSchema = z.object({

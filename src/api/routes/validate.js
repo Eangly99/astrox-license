@@ -1,7 +1,7 @@
 import { validateRequestSchema } from '../../utils/validators.js';
 import { validateLicense } from '../../services/licenseService.js';
 import { createLogger } from '../../utils/logger.js';
-import { maskKey } from '../../services/cryptoService.js';
+import { maskKey } from '../../utils/formatters.js';
 
 const log = createLogger('api-validate');
 

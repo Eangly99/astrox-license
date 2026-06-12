@@ -5,8 +5,8 @@ import {
   signJwt,
   verifyJwt,
   hashHwid,
-  maskKey,
 } from '../../src/services/cryptoService.js';
+import { maskKey } from '../../src/utils/formatters.js';
 
 describe('Crypto Service Tests', () => {
   it('should generate valid license keys', () => {

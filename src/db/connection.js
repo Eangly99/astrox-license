@@ -6,11 +6,12 @@ const log = createLogger('mongodb');
 
 export async function connectDatabase() {
   const uri = config.MONGODB_URI;
-  log.info({ uri }, 'Connecting to MongoDB...');
+  const safeUri = uri.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@');
+  log.info({ uri: safeUri }, 'Connecting to MongoDB...');
 
   try {
     await mongoose.connect(uri, {
-      autoIndex: true,
+      autoIndex: config.NODE_ENV !== 'production',
     });
     log.info('MongoDB connected successfully');
   } catch (error) {

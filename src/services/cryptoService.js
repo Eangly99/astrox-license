@@ -88,12 +88,4 @@ export function hashHwid(rawHwid) {
   return crypto.createHash('sha256').update(rawHwid).digest('hex');
 }
 
-/**
- * Mask a license key for safe display.
- * @param {string} key
- * @returns {string}
- */
-export function maskKey(key) {
-  if (!key || key.length <= 8) return key || 'N/A';
-  return `${'•'.repeat(8)}${key.slice(-8)}`;
-}
+

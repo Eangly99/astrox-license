@@ -7,8 +7,8 @@ import {
   verifyLicenseKey,
   signJwt,
   hashHwid,
-  maskKey,
 } from './cryptoService.js';
+import { maskKey } from '../utils/formatters.js';
 import { cacheService } from './cacheService.js';
 import {
   LICENSE_STATUS,
@@ -67,6 +67,8 @@ export async function createLicense(
     maxIps,
     expiresAt,
   });
+
+  await cacheService.delete('stats:dashboard');
 
   log.info({ key: maskKey(key), ownerId }, 'License created successfully');
   return license;
@@ -162,6 +164,7 @@ export async function validateLicense({ licenseKey, pluginId, serverIp, hwid }) 
         license.activeCacheKeys = [];
       }
       await license.save();
+      await cacheService.delete('stats:dashboard');
       await AuditLog.log(AUDIT_ACTIONS.EXPIRE, 'system', licenseKey, {
         reason: 'License expired',
       });
@@ -253,6 +256,7 @@ export async function validateLicense({ licenseKey, pluginId, serverIp, hwid }) 
       license.activeCacheKeys = [];
     }
     await license.save();
+    await cacheService.delete('stats:dashboard');
 
     await AuditLog.log(AUDIT_ACTIONS.SUSPEND, 'system', licenseKey, {
       reason: 'Shared license usage: unique IPs > threshold',
@@ -311,6 +315,7 @@ export async function revokeLicense(key, actorId, reason = 'No reason provided')
   }
 
   await license.save();
+  await cacheService.delete('stats:dashboard');
 
   await AuditLog.log(AUDIT_ACTIONS.REVOKE, actorId, key, { reason });
   await cacheService.delete(`validate:${key}`);
@@ -351,6 +356,7 @@ export async function transferLicense(key, newOwnerId, newOwnerTag, actorId) {
   }
 
   await license.save();
+  await cacheService.delete('stats:dashboard');
 
   await AuditLog.log(AUDIT_ACTIONS.TRANSFER, actorId, key, {
     oldOwnerId,
@@ -386,6 +392,7 @@ export async function suspendLicense(key, actorId, reason = 'No reason provided'
   }
 
   await license.save();
+  await cacheService.delete('stats:dashboard');
 
   await AuditLog.log(AUDIT_ACTIONS.SUSPEND, actorId, key, { reason });
   await cacheService.delete(`validate:${key}`);
@@ -412,6 +419,8 @@ export async function listLicenses({ ownerId, pluginId, status, page = 1, limit 
       { key: { $in: expiredKeys } },
       { $set: { status: LICENSE_STATUS.EXPIRED } }
     );
+
+    await cacheService.delete('stats:dashboard');
 
     // Write audit logs and delete cache keys for all expired licenses
     for (const license of expiredLicenses) {
@@ -472,6 +481,7 @@ export async function getLicenseByKey(key) {
       license.activeCacheKeys = [];
     }
     await license.save();
+    await cacheService.delete('stats:dashboard');
     await AuditLog.log(AUDIT_ACTIONS.EXPIRE, 'system', license.key, {
       reason: 'License expired',
     });
@@ -483,6 +493,12 @@ export async function getLicenseByKey(key) {
  * Get dashboard stats summaries.
  */
 export async function getStats() {
+  const cacheKey = 'stats:dashboard';
+  const cached = await cacheService.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const total = await License.countDocuments();
   const active = await License.countDocuments({ status: LICENSE_STATUS.ACTIVE });
   const suspended = await License.countDocuments({ status: LICENSE_STATUS.SUSPENDED });
@@ -518,7 +534,7 @@ export async function getStats() {
     },
   ]);
 
-  return {
+  const result = {
     total,
     active,
     suspended,
@@ -527,6 +543,9 @@ export async function getStats() {
     types: typeBreakdown.reduce((acc, curr) => ({ ...acc, [curr._id]: curr.count }), {}),
     plugins: pluginBreakdown,
   };
+
+  await cacheService.set(cacheKey, result, 60000); // 60s cache TTL
+  return result;
 }
 
 /**

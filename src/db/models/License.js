@@ -63,6 +63,10 @@ const licenseSchema = new Schema(
       type: Date,
       default: null,
     },
+    activeCacheKeys: {
+      type: [String],
+      default: [],
+    },
     metadata: {
       type: Map,
       of: Schema.Types.Mixed,

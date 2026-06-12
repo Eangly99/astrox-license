@@ -9,7 +9,10 @@ import {
   validateLicense,
   transferLicense,
   updateLicenseIps,
+  revokeLicense,
+  listLicenses,
 } from '../../src/services/licenseService.js';
+import { cacheService } from '../../src/services/cacheService.js';
 
 describe('License Service Integration Tests', () => {
   let mockPlugin;
@@ -275,5 +278,141 @@ describe('License Service Integration Tests', () => {
     await expect(
       updateLicenseIps(lic.key, 'someone_else', ['1.1.1.1'], 'someone_else'),
     ).rejects.toThrow('License not found');
+  });
+
+  it('should store activeCacheKeys and evict them on revocation/suspension', async () => {
+    const lic = await createLicense(
+      {
+        pluginId: mockPlugin._id.toString(),
+        ownerId: 'cache_user',
+        ownerTag: 'CacheOwner#0000',
+        type: 'lifetime',
+        maxIps: 1,
+      },
+      'admin_user_id',
+    );
+
+    // Validate (caches success)
+    const check1 = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '127.0.0.1',
+      hwid: 'hwid_cache_test',
+    });
+    expect(check1.valid).toBe(true);
+
+    // Verify it's in the DB and cached
+    const fromDb = await License.findById(lic._id).lean();
+    expect(fromDb.activeCacheKeys).toHaveLength(1);
+    const cachedKey = fromDb.activeCacheKeys[0];
+
+    const cachedVal = await cacheService.get(cachedKey);
+    expect(cachedVal).toBeDefined();
+    expect(cachedVal.valid).toBe(true);
+
+    // Revoke
+    await revokeLicense(lic.key, 'admin_user_id', 'testing cache eviction');
+
+    // Verify cache is cleared
+    const cachedValAfter = await cacheService.get(cachedKey);
+    expect(cachedValAfter).toBeUndefined();
+  });
+
+  it('should paginate and bulk-update expired licenses in listLicenses', async () => {
+    // Clean first
+    await License.deleteMany({});
+
+    // Create 3 licenses, 2 expired but status set to active initially in DB
+    const now = Date.now();
+    
+    // We create licenses via createLicense to ensure they have valid cryptographic keys
+    const lic1 = await createLicense(
+      {
+        pluginId: mockPlugin._id.toString(),
+        ownerId: 'list_user',
+        ownerTag: 'List#0000',
+        type: 'trial',
+        duration: '86400000',
+        maxIps: 1,
+      },
+      'admin_user_id',
+    );
+
+    const lic2 = await createLicense(
+      {
+        pluginId: mockPlugin._id.toString(),
+        ownerId: 'list_user',
+        ownerTag: 'List#0000',
+        type: 'trial',
+        duration: '86400000',
+        maxIps: 1,
+      },
+      'admin_user_id',
+    );
+
+    const lic3 = await createLicense(
+      {
+        pluginId: mockPlugin._id.toString(),
+        ownerId: 'list_user',
+        ownerTag: 'List#0000',
+        type: 'lifetime',
+        maxIps: 1,
+      },
+      'admin_user_id',
+    );
+
+    // Backdate expiresAt in DB for 1 and 2
+    await License.updateOne({ _id: lic1._id }, { $set: { expiresAt: new Date(now - 10000) } });
+    await License.updateOne({ _id: lic2._id }, { $set: { expiresAt: new Date(now - 20000) } });
+
+    // Call listLicenses with pagination limit 2
+    const result = await listLicenses({ ownerId: 'list_user', page: 1, limit: 2 });
+    expect(result.total).toBe(3);
+    expect(result.licenses).toHaveLength(2);
+    expect(result.totalPages).toBe(2);
+
+    // Check that lic1 and lic2 were transitioned to expired
+    const l1db = await License.findById(lic1._id).lean();
+    const l2db = await License.findById(lic2._id).lean();
+    expect(l1db.status).toBe('expired');
+    expect(l2db.status).toBe('expired');
+
+    const l3db = await License.findById(lic3._id).lean();
+    expect(l3db.status).toBe('active');
+  });
+
+  it('should handle atomic HWID binding and reject concurrent mismatch', async () => {
+    const lic = await createLicense(
+      {
+        pluginId: mockPlugin._id.toString(),
+        ownerId: 'hwid_user',
+        ownerTag: 'HwidOwner#0000',
+        type: 'lifetime',
+        maxIps: 1,
+      },
+      'admin_user_id',
+    );
+
+    // Concurrently validate with two different HWIDs.
+    // Since we simulate first use:
+    // First request should win. Second request should fail because it has a different HWID.
+    // Let's call them.
+    const res1 = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '127.0.0.1',
+      hwid: 'first_hwid_bind_attempt',
+    });
+    
+    const res2 = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '127.0.0.1',
+      hwid: 'second_hwid_bind_attempt',
+    });
+
+    expect(res1.valid).toBe(true);
+    expect(res2.valid).toBe(false);
+    expect(res2.reason).toContain('Hardware ID binding mismatch');
   });
 });

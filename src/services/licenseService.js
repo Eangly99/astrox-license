@@ -76,7 +76,8 @@ export async function createLicense(
  * Validate a license during handshake.
  */
 export async function validateLicense({ licenseKey, pluginId, serverIp, hwid }) {
-  const cacheKey = `validate:${licenseKey}:${pluginId}:${serverIp}:${hwid}`;
+  const hashedHwid = hashHwid(hwid);
+  const cacheKey = `validate:${licenseKey}:${pluginId}:${serverIp}:${hashedHwid}`;
 
   // 1. Check cache first
   const cached = await cacheService.get(cacheKey);
@@ -90,8 +91,6 @@ export async function validateLicense({ licenseKey, pluginId, serverIp, hwid }) 
     log.warn({ key: maskKey(licenseKey) }, 'License key failed cryptographic signature check');
     return { valid: false, reason: 'Invalid license key signature' };
   }
-
-  const hashedHwid = hashHwid(hwid);
 
   // 3. Check Blacklist (cached)
   const blacklistCacheKey = 'blacklist:all';
@@ -127,6 +126,11 @@ export async function validateLicense({ licenseKey, pluginId, serverIp, hwid }) 
   }
 
   // 5. Verify plugin slug or ID matches
+  if (!license.pluginId || typeof license.pluginId !== 'object') {
+    log.warn({ key: maskKey(licenseKey) }, 'License has no associated plugin');
+    return { valid: false, reason: 'Associated plugin not found' };
+  }
+
   const pluginMatch =
     license.pluginId._id.toString() === pluginId ||
     license.pluginId.slug.toLowerCase() === pluginId.toLowerCase();
@@ -150,19 +154,45 @@ export async function validateLicense({ licenseKey, pluginId, serverIp, hwid }) 
   if (license.expiresAt && new Date() > license.expiresAt) {
     if (license.status !== LICENSE_STATUS.EXPIRED) {
       license.status = LICENSE_STATUS.EXPIRED;
+      // Evict validation cache entries
+      if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
+        for (const keyToDel of license.activeCacheKeys) {
+          await cacheService.delete(keyToDel);
+        }
+        license.activeCacheKeys = [];
+      }
       await license.save();
-      await AuditLog.log(AUDIT_ACTIONS.SUSPEND, 'system', licenseKey, {
+      await AuditLog.log(AUDIT_ACTIONS.EXPIRE, 'system', licenseKey, {
         reason: 'License expired',
       });
     }
     return { valid: false, reason: 'License has expired' };
   }
 
-  // 7. Bind HWID on first use or verify match
+  // 7. Bind HWID on first use or verify match (atomic update)
   if (!license.hwid) {
-    license.hwid = hashedHwid;
-    license.activatedAt = new Date();
-    log.info({ key: maskKey(licenseKey), hwid: hashedHwid }, 'License bound to HWID on first use');
+    const hwidUpdatedLicense = await License.findOneAndUpdate(
+      { _id: license._id, hwid: null },
+      { $set: { hwid: hashedHwid, activatedAt: new Date() } },
+      { new: true },
+    );
+    if (!hwidUpdatedLicense) {
+      // Lost race to a concurrent request, fetch DB value
+      const reFetched = await License.findById(license._id);
+      if (!reFetched || reFetched.hwid !== hashedHwid) {
+        log.warn(
+          { key: maskKey(licenseKey), expected: reFetched?.hwid, got: hashedHwid },
+          'HWID mismatch after concurrent binding attempt',
+        );
+        return { valid: false, reason: 'Hardware ID binding mismatch' };
+      }
+      license.hwid = reFetched.hwid;
+      license.activatedAt = reFetched.activatedAt;
+    } else {
+      license.hwid = hashedHwid;
+      license.activatedAt = hwidUpdatedLicense.activatedAt;
+      log.info({ key: maskKey(licenseKey), hwid: hashedHwid }, 'License bound to HWID on first use');
+    }
   } else if (license.hwid !== hashedHwid) {
     log.warn(
       { key: maskKey(licenseKey), expected: license.hwid, got: hashedHwid },
@@ -215,6 +245,13 @@ export async function validateLicense({ licenseKey, pluginId, serverIp, hwid }) 
   const uniqueIps24h = new Set(validationIps.map((item) => item.ip)).size;
   if (uniqueIps24h > SHARED_DETECTION_THRESHOLD) {
     license.status = LICENSE_STATUS.SUSPENDED;
+    // Evict validation cache entries
+    if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
+      for (const keyToDel of license.activeCacheKeys) {
+        await cacheService.delete(keyToDel);
+      }
+      license.activeCacheKeys = [];
+    }
     await license.save();
 
     await AuditLog.log(AUDIT_ACTIONS.SUSPEND, 'system', licenseKey, {
@@ -226,8 +263,14 @@ export async function validateLicense({ licenseKey, pluginId, serverIp, hwid }) 
     return { valid: false, reason: 'Suspended: Shared license usage detected' };
   }
 
-  // 10. Update validation timestamp
+  // 10. Update validation timestamp and active cache keys
   license.lastValidatedAt = new Date();
+  if (!license.activeCacheKeys) {
+    license.activeCacheKeys = [];
+  }
+  if (!license.activeCacheKeys.includes(cacheKey)) {
+    license.activeCacheKeys.push(cacheKey);
+  }
   await license.save();
 
   // 11. Create signed token (JWT)
@@ -258,6 +301,15 @@ export async function revokeLicense(key, actorId, reason = 'No reason provided')
   }
 
   license.status = LICENSE_STATUS.REVOKED;
+
+  // Clear active validation caches
+  if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
+    for (const keyToDel of license.activeCacheKeys) {
+      await cacheService.delete(keyToDel);
+    }
+    license.activeCacheKeys = [];
+  }
+
   await license.save();
 
   await AuditLog.log(AUDIT_ACTIONS.REVOKE, actorId, key, { reason });
@@ -290,6 +342,14 @@ export async function transferLicense(key, newOwnerId, newOwnerTag, actorId) {
     license.metadata.delete('validationIps');
   }
 
+  // Clear active validation caches
+  if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
+    for (const keyToDel of license.activeCacheKeys) {
+      await cacheService.delete(keyToDel);
+    }
+    license.activeCacheKeys = [];
+  }
+
   await license.save();
 
   await AuditLog.log(AUDIT_ACTIONS.TRANSFER, actorId, key, {
@@ -316,6 +376,15 @@ export async function suspendLicense(key, actorId, reason = 'No reason provided'
   }
 
   license.status = LICENSE_STATUS.SUSPENDED;
+
+  // Clear active validation caches
+  if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
+    for (const keyToDel of license.activeCacheKeys) {
+      await cacheService.delete(keyToDel);
+    }
+    license.activeCacheKeys = [];
+  }
+
   await license.save();
 
   await AuditLog.log(AUDIT_ACTIONS.SUSPEND, actorId, key, { reason });
@@ -328,42 +397,54 @@ export async function suspendLicense(key, actorId, reason = 'No reason provided'
  * List licenses with filters and pagination.
  */
 export async function listLicenses({ ownerId, pluginId, status, page = 1, limit = 10 }) {
+  // 1. Bulk update expired licenses to avoid N+1 writes
+  const now = new Date();
+  const expiredLicenses = await License.find({
+    expiresAt: { $lt: now },
+    status: { $nin: [LICENSE_STATUS.EXPIRED, LICENSE_STATUS.REVOKED] },
+  });
+
+  if (expiredLicenses.length > 0) {
+    const expiredKeys = expiredLicenses.map((l) => l.key);
+    
+    // Bulk update status in DB
+    await License.updateMany(
+      { key: { $in: expiredKeys } },
+      { $set: { status: LICENSE_STATUS.EXPIRED } }
+    );
+
+    // Write audit logs and delete cache keys for all expired licenses
+    for (const license of expiredLicenses) {
+      await AuditLog.log(AUDIT_ACTIONS.EXPIRE, 'system', license.key, {
+        reason: 'License expired',
+      });
+      if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
+        for (const keyToDel of license.activeCacheKeys) {
+          await cacheService.delete(keyToDel);
+        }
+      }
+    }
+  }
+
+  // 2. Build pagination query
   const query = {};
   if (ownerId) query.ownerId = ownerId;
   if (pluginId) query.pluginId = pluginId;
   if (status) query.status = status;
 
-  const licenses = await License.find(query).populate('pluginId').sort({ createdAt: -1 });
-
-  const processed = [];
-  for (const license of licenses) {
-    if (
-      license.expiresAt &&
-      new Date() > license.expiresAt &&
-      license.status !== LICENSE_STATUS.EXPIRED &&
-      license.status !== LICENSE_STATUS.REVOKED
-    ) {
-      license.status = LICENSE_STATUS.EXPIRED;
-      await license.save();
-      await AuditLog.log(AUDIT_ACTIONS.SUSPEND, 'system', license.key, {
-        reason: 'License expired',
-      });
-    }
-
-    if (!status || license.status === status) {
-      processed.push(license.toObject());
-    }
-  }
-
-  const total = processed.length;
+  const total = await License.countDocuments(query);
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const currentPage = Math.min(page, totalPages);
   const skip = (currentPage - 1) * limit;
 
-  const paginated = processed.slice(skip, skip + limit);
+  const licenses = await License.find(query)
+    .populate('pluginId')
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
 
   return {
-    licenses: paginated,
+    licenses: licenses.map((l) => l.toObject()),
     total,
     page: currentPage,
     totalPages,
@@ -383,8 +464,15 @@ export async function getLicenseByKey(key) {
     license.status !== LICENSE_STATUS.REVOKED
   ) {
     license.status = LICENSE_STATUS.EXPIRED;
+    // Clear active validation caches
+    if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
+      for (const keyToDel of license.activeCacheKeys) {
+        await cacheService.delete(keyToDel);
+      }
+      license.activeCacheKeys = [];
+    }
     await license.save();
-    await AuditLog.log(AUDIT_ACTIONS.SUSPEND, 'system', license.key, {
+    await AuditLog.log(AUDIT_ACTIONS.EXPIRE, 'system', license.key, {
       reason: 'License expired',
     });
   }
@@ -465,7 +553,7 @@ export async function updateLicenseIps(key, ownerId, ips, actorId) {
     );
   }
 
-  const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
+  const ipRegex = /^((25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(25[0-5]|2[0-4]\d|[01]?\d\d?)$/;
   for (const ip of ips) {
     if (!ipRegex.test(ip)) {
       throw new Error(`Invalid IPv4 address format: ${ip}`);
@@ -474,6 +562,15 @@ export async function updateLicenseIps(key, ownerId, ips, actorId) {
 
   const oldIps = [...license.allowedIps];
   license.allowedIps = ips;
+
+  // Clear active validation caches
+  if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
+    for (const keyToDel of license.activeCacheKeys) {
+      await cacheService.delete(keyToDel);
+    }
+    license.activeCacheKeys = [];
+  }
+
   await license.save();
 
   // Audit log

@@ -39,14 +39,23 @@ async function setupServer() {
   await fastify.register(validateRoute);
 }
 
-// Setup hook
-const initPromise = setupServer();
+let initPromise = null;
+
+/**
+ * Ensure Fastify server plugins/routes are registered.
+ */
+export async function ensureServerSetup() {
+  if (!initPromise) {
+    initPromise = setupServer();
+  }
+  return initPromise;
+}
 
 /**
  * Start Fastify REST API.
  */
 export async function startApi() {
-  await initPromise;
+  await ensureServerSetup();
   try {
     const address = await fastify.listen({
       port: config.API_PORT,

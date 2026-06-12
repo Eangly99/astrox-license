@@ -41,15 +41,18 @@ export async function execute(client) {
   const updatePresence = async () => {
     try {
       const totalLicenses = await License.countDocuments();
-      client.user.setActivity(`Managing ${totalLicenses} Licenses`, { type: ActivityType.Playing });
+      client.user.setPresence({
+        activities: [{ name: `Managing ${totalLicenses} Licenses`, type: ActivityType.Playing }],
+        status: 'online',
+      });
       log.debug({ totalLicenses }, 'Client presence activity updated');
     } catch (err) {
       log.error({ err }, 'Failed to update presence activity');
     }
   };
 
-  // Run immediately on boot
-  await updatePresence();
+  // Run with a 5-second delay to allow gateway session stabilization
+  setTimeout(updatePresence, 5000);
 
   // Refresh every 10 minutes
   setInterval(updatePresence, 10 * 60 * 1000);

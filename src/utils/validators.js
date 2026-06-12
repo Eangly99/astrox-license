@@ -35,7 +35,7 @@ export const pluginCreateSchema = z.object({
     .regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with dashes'),
   version: z.string().optional().default('1.0.0'),
   description: z.string().max(256).optional().default(''),
-  iconUrl: z.string().url().optional(),
+  iconUrl: z.url().optional(),
 });
 
 /** Validate transfer input */

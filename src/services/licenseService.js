@@ -93,18 +93,27 @@ export async function validateLicense({ licenseKey, pluginId, serverIp, hwid }) 
 
   const hashedHwid = hashHwid(hwid);
 
-  // 3. Check Blacklist
-  const blacklisted = await Blacklist.findOne({
-    $or: [
-      { type: BLACKLIST_TYPES.KEY, value: licenseKey },
-      { type: BLACKLIST_TYPES.HWID, value: hashedHwid },
-      { type: BLACKLIST_TYPES.IP, value: serverIp },
-    ],
-  }).lean();
+  // 3. Check Blacklist (cached)
+  const blacklistCacheKey = 'blacklist:all';
+  let blacklistSet = await cacheService.get(blacklistCacheKey);
+  if (!blacklistSet) {
+    const list = await Blacklist.find().lean();
+    blacklistSet = {
+      keys: list.filter((e) => e.type === BLACKLIST_TYPES.KEY).map((e) => e.value),
+      hwids: list.filter((e) => e.type === BLACKLIST_TYPES.HWID).map((e) => e.value),
+      ips: list.filter((e) => e.type === BLACKLIST_TYPES.IP).map((e) => e.value),
+    };
+    await cacheService.set(blacklistCacheKey, blacklistSet, 300000); // 5 minute TTL
+  }
 
-  if (blacklisted) {
+  const isBlacklisted =
+    blacklistSet.keys.includes(licenseKey) ||
+    (hashedHwid && blacklistSet.hwids.includes(hashedHwid)) ||
+    blacklistSet.ips.includes(serverIp);
+
+  if (isBlacklisted) {
     log.warn(
-      { key: maskKey(licenseKey), ip: serverIp, type: blacklisted.type },
+      { key: maskKey(licenseKey), ip: serverIp },
       'Block list match detected during validation',
     );
     return { valid: false, reason: 'This entity has been blacklisted' };
@@ -163,15 +172,30 @@ export async function validateLicense({ licenseKey, pluginId, serverIp, hwid }) 
   }
 
   // 8. Whitelist IP or check limit
-  if (!license.allowedIps.includes(serverIp)) {
-    if (license.allowedIps.length >= license.maxIps) {
-      log.warn(
-        { key: maskKey(licenseKey), count: license.allowedIps.length, max: license.maxIps },
-        'IP limit exceeded',
-      );
-      return { valid: false, reason: 'Maximum IP limit exceeded' };
-    }
-    license.allowedIps.push(serverIp);
+  // Atomic IP update with maximum bounds verification to prevent concurrency races
+  const updatedLicense = await License.findOneAndUpdate(
+    {
+      _id: license._id,
+      $or: [
+        { allowedIps: serverIp }, // Already exists
+        { [`allowedIps.${license.maxIps - 1}`]: { $exists: false } }, // Room available
+      ],
+    },
+    { $addToSet: { allowedIps: serverIp } },
+    { new: true },
+  );
+
+  if (!updatedLicense) {
+    log.warn(
+      { key: maskKey(licenseKey), count: license.allowedIps.length, max: license.maxIps },
+      'IP limit exceeded during atomic whitelist update',
+    );
+    return { valid: false, reason: 'Maximum IP limit exceeded' };
+  }
+
+  const isNewIpAdded = !license.allowedIps.includes(serverIp);
+  license.allowedIps = updatedLicense.allowedIps;
+  if (isNewIpAdded) {
     log.info({ key: maskKey(licenseKey), ip: serverIp }, 'New IP added to license whitelist');
   }
 
@@ -432,4 +456,33 @@ export async function updateLicenseIps(key, ownerId, ips, actorId) {
 
   log.info({ key: maskKey(key), ownerId }, 'License IPs updated successfully');
   return license;
+}
+
+/**
+ * Add an entity to the global blacklist and clear cache.
+ */
+export async function addBlacklist({ type, value, reason }, actorId) {
+  log.info({ type, value, actorId }, 'Adding to blacklist...');
+  const entry = await Blacklist.create({ type, value, reason, addedBy: actorId });
+
+  // Clear specific validation cache if key is blocked
+  if (type === BLACKLIST_TYPES.KEY) {
+    await cacheService.delete(`validate:${value}`);
+  }
+  // Clear blacklist cache set
+  await cacheService.delete('blacklist:all');
+
+  return entry;
+}
+
+/**
+ * Remove an entity from the global blacklist and clear cache.
+ */
+export async function removeBlacklist({ type, value }, actorId) {
+  log.info({ type, value, actorId }, 'Removing from blacklist...');
+  const entry = await Blacklist.findOneAndDelete({ type, value });
+  if (entry) {
+    await cacheService.delete('blacklist:all');
+  }
+  return entry;
 }

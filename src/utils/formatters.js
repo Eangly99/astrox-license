@@ -1,4 +1,4 @@
-import { STATUS_BADGES } from './constants.js';
+import { STATUS_BADGES, DURATION_PRESETS } from './constants.js';
 
 /**
  * Format milliseconds into a human-readable duration string.
@@ -82,4 +82,70 @@ export function truncate(str, max = 100) {
 export function formatIpList(ips, max) {
   if (!ips || ips.length === 0) return 'None bound';
   return `${ips.join(', ')} (${ips.length}/${max})`;
+}
+
+/**
+ * Mask an IP address for privacy, concealing the last block of digits.
+ * @param {string} ip
+ * @returns {string} e.g. "192.168.1.xxx" or "N/A"
+ */
+export function maskIpAddress(ip) {
+  if (!ip || typeof ip !== 'string') return 'N/A';
+  const parts = ip.split('.');
+  if (parts.length !== 4) return ip; // Fallback for IPv6 or malformed
+  return `${parts[0]}.${parts[1]}.${parts[2]}.xxx`;
+}
+
+/**
+ * Format raw bytes into a human-readable size string.
+ * @param {number} bytes
+ * @param {number} decimals
+ * @returns {string} e.g. "1.25 MB"
+ */
+export function formatBytes(bytes, decimals = 2) {
+  if (!bytes || isNaN(bytes) || bytes <= 0) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+}
+
+/**
+ * Parse a human duration string into milliseconds.
+ * Supports: s (seconds), m (minutes), h (hours), d (days), w (weeks).
+ * @param {string} str
+ * @returns {number|null} milliseconds or null if invalid
+ */
+export function parseDuration(str) {
+  if (!str) return null;
+  const cleaned = str.trim().toLowerCase();
+
+  // Check DURATION_PRESETS first
+  const preset = DURATION_PRESETS[cleaned];
+  if (preset) return preset;
+
+  const match = cleaned.match(/^(\d+)([smhdw])$/);
+  if (!match) {
+    const rawNum = parseInt(cleaned, 10);
+    return !isNaN(rawNum) && rawNum > 0 ? rawNum : null;
+  }
+
+  const value = parseInt(match[1], 10);
+  const unit = match[2];
+
+  switch (unit) {
+    case 's':
+      return value * 1000;
+    case 'm':
+      return value * 60 * 1000;
+    case 'h':
+      return value * 60 * 60 * 1000;
+    case 'd':
+      return value * 24 * 60 * 60 * 1000;
+    case 'w':
+      return value * 7 * 24 * 60 * 60 * 1000;
+    default:
+      return null;
+  }
 }

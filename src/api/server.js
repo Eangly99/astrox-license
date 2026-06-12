@@ -10,6 +10,7 @@ const log = createLogger('api-server');
 export const fastify = Fastify({
   logger: false, // Override built-in logging
   disableRequestLogging: true,
+  trustProxy: config.NODE_ENV === 'production' || !!config.REDIS_URI,
 });
 
 // Register Plugins & Routes

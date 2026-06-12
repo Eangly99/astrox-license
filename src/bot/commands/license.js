@@ -24,10 +24,9 @@ import {
   createSuccessEmbed,
   createWarningEmbed,
 } from '../embeds/commonEmbeds.js';
-import { DURATION_PRESETS } from '../../utils/constants.js';
 import { generateLicenseSchema, transferLicenseSchema } from '../../utils/validators.js';
 import { pendingRevocations } from '../components/licenseButtons.js';
-import { maskKey } from '../../utils/formatters.js';
+import { maskKey, parseDuration } from '../../utils/formatters.js';
 
 export const adminOnly = true;
 
@@ -208,20 +207,15 @@ export async function execute(interaction) {
         return await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
       }
 
-      const presetVal = DURATION_PRESETS[rawDuration.toLowerCase()];
-      if (presetVal) {
-        duration = presetVal.toString();
-      } else {
-        const customMs = parseInt(rawDuration, 10);
-        if (isNaN(customMs) || customMs <= 0) {
-          const errEmbed = createErrorEmbed(
-            'Invalid Duration',
-            'Please supply a preset (1d, 7d, 30d, 90d, 365d) or an integer duration in ms.',
-          );
-          return await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
-        }
-        duration = customMs.toString();
+      const parsedMs = parseDuration(rawDuration);
+      if (!parsedMs) {
+        const errEmbed = createErrorEmbed(
+          'Invalid Duration',
+          'Please supply a valid preset (e.g. 1d, 30d) or custom duration format (e.g. 12h, 2w, 30m).',
+        );
+        return await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
       }
+      duration = parsedMs.toString();
     }
 
     try {

@@ -4,6 +4,7 @@ import { createLicense, updateLicenseIps, getLicenseByKey } from '../../services
 import { createLogger } from '../../utils/logger.js';
 import { createSuccessEmbed, createErrorEmbed } from '../embeds/commonEmbeds.js';
 import { DURATION_PRESETS } from '../../utils/constants.js';
+import { parseDuration } from '../../utils/formatters.js';
 
 const log = createLogger('license-modal');
 
@@ -87,17 +88,12 @@ export async function handleModal(interaction) {
   let duration = null;
 
   if (licenseType !== 'lifetime') {
-    const preset = DURATION_PRESETS[rawDuration];
-    if (preset) {
-      duration = preset.toString();
+    const parsedMs = parseDuration(rawDuration);
+    if (parsedMs) {
+      duration = parsedMs.toString();
     } else {
-      const parsedMs = parseInt(rawDuration, 10);
-      if (!isNaN(parsedMs) && parsedMs > 0) {
-        duration = parsedMs.toString();
-      } else {
-        // Fallback to 30 days if invalid duration format given for trial/subscription
-        duration = DURATION_PRESETS['30d'].toString();
-      }
+      // Fallback to 30 days if invalid duration format given for trial/subscription
+      duration = DURATION_PRESETS['30d'].toString();
     }
   }
 

@@ -11,7 +11,7 @@ import Blacklist from '../../db/models/Blacklist.js';
 import AuditLog from '../../db/models/AuditLog.js';
 import Plugin from '../../db/models/Plugin.js';
 import License from '../../db/models/License.js';
-import { getStats } from '../../services/licenseService.js';
+import { getStats, addBlacklist, removeBlacklist } from '../../services/licenseService.js';
 import { createStatsEmbed, createAuditEmbed, createBlacklistEmbed } from '../embeds/adminEmbeds.js';
 import {
   createSuccessEmbed,
@@ -257,7 +257,7 @@ export async function execute(interaction) {
       }
 
       try {
-        await Blacklist.create({ type, value, reason, addedBy: interaction.user.id });
+        await addBlacklist({ type, value, reason }, interaction.user.id);
         await AuditLog.log(
           AUDIT_ACTIONS.BLACKLIST_ADD,
           interaction.user.id,
@@ -287,7 +287,7 @@ export async function execute(interaction) {
       const value = interaction.options.getString('value').trim();
 
       try {
-        const res = await Blacklist.findOneAndDelete({ type, value });
+        const res = await removeBlacklist({ type, value }, interaction.user.id);
         if (!res) {
           const errEmbed = createErrorEmbed(
             'Not Found',

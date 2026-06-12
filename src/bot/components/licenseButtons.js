@@ -29,10 +29,11 @@ export async function handleButton(interaction) {
   // 1. Confirm Revoke
   if (customId === 'confirm_revoke') {
     const pending = pendingRevocations.get(interaction.user.id);
-    if (!pending) {
+    if (!pending || Date.now() > pending.expiresAt) {
+      pendingRevocations.delete(interaction.user.id);
       const errorEmbed = createErrorEmbed(
         'Action Expired',
-        'The pending revocation action could not be found or has expired.',
+        'The pending revocation action could not be found or has expired (5 minute limit).',
       );
       return await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
     }

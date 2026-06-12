@@ -20,7 +20,7 @@ export function createLicenseEmbed(license) {
     .setColor(color)
     .addFields(
       { name: 'License Key', value: blockQuote(inlineCode(maskKey(license.key))), inline: false },
-      { name: 'Plugin', value: license.pluginId.name || 'Unknown Plugin', inline: true },
+      { name: 'Plugin', value: license.pluginId?.name || 'Unknown Plugin', inline: true },
       { name: 'Owner', value: userMention(license.ownerId), inline: true },
       { name: 'Type', value: license.type.toUpperCase(), inline: true },
       { name: 'Status', value: statusBadge(license.status), inline: true },
@@ -83,7 +83,7 @@ export function createLicenseCreatedEmbed(license, rawKey) {
       `Here is your newly generated license key. ${bold('Store this securely')}, it will not be displayed in plaintext again.\n\n${codeBlock(rawKey)}`,
     )
     .addFields(
-      { name: 'Plugin Name', value: license.pluginId.name || 'Unknown Plugin', inline: true },
+      { name: 'Plugin Name', value: license.pluginId?.name || 'Unknown Plugin', inline: true },
       { name: 'Owner', value: userMention(license.ownerId), inline: true },
       { name: 'License Type', value: license.type.toUpperCase(), inline: true },
       {

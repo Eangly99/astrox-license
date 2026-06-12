@@ -7,6 +7,9 @@ import {
   MessageFlags,
 } from 'discord.js';
 import License from '../../db/models/License.js';
+import AuditLog from '../../db/models/AuditLog.js';
+import { cacheService } from '../../services/cacheService.js';
+import { LICENSE_STATUS, AUDIT_ACTIONS } from '../../utils/constants.js';
 import { createLicenseEmbed } from '../embeds/licenseEmbeds.js';
 import { createErrorEmbed, createInfoEmbed } from '../embeds/commonEmbeds.js';
 
@@ -16,28 +19,40 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
   try {
-    const licenses = await License.find({
+    const now = new Date();
+    // 1. Bulk update expired licenses for this user
+    const expiredLicenses = await License.find({
       ownerId: interaction.user.id,
-      status: { $in: ['active', 'suspended'] },
+      expiresAt: { $lt: now },
+      status: { $nin: [LICENSE_STATUS.EXPIRED, LICENSE_STATUS.REVOKED] },
+    });
+
+    if (expiredLicenses.length > 0) {
+      const expiredKeys = expiredLicenses.map((l) => l.key);
+      await License.updateMany(
+        { key: { $in: expiredKeys } },
+        { $set: { status: LICENSE_STATUS.EXPIRED } }
+      );
+      for (const license of expiredLicenses) {
+        await AuditLog.log(AUDIT_ACTIONS.EXPIRE, 'system', license.key, {
+          reason: 'License expired',
+        });
+        if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
+          for (const keyToDel of license.activeCacheKeys) {
+            await cacheService.delete(keyToDel);
+          }
+        }
+      }
+      await cacheService.delete('stats:dashboard');
+    }
+
+    // 2. Fetch active and suspended licenses
+    const activeLicenses = await License.find({
+      ownerId: interaction.user.id,
+      status: { $in: [LICENSE_STATUS.ACTIVE, LICENSE_STATUS.SUSPENDED] },
     })
       .populate('pluginId')
       .sort({ createdAt: -1 });
-
-    const activeLicenses = [];
-    for (const lic of licenses) {
-      if (
-        lic.expiresAt &&
-        new Date() > lic.expiresAt &&
-        lic.status !== 'expired' &&
-        lic.status !== 'revoked'
-      ) {
-        lic.status = 'expired';
-        await lic.save();
-      }
-      if (lic.status === 'active' || lic.status === 'suspended') {
-        activeLicenses.push(lic);
-      }
-    }
 
     if (!activeLicenses || activeLicenses.length === 0) {
       const errEmbed = createErrorEmbed(

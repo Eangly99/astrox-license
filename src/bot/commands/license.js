@@ -6,6 +6,9 @@ import {
   bold,
   userMention,
   MessageFlags,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
 } from 'discord.js';
 import Plugin from '../../db/models/Plugin.js';
 import {
@@ -137,6 +140,9 @@ export const data = new SlashCommandBuilder()
             { name: 'Expired', value: 'expired' },
           ),
       ),
+  )
+  .addSubcommand((sub) =>
+    sub.setName('bulk').setDescription('Open modal to generate licenses in bulk'),
   );
 
 /**
@@ -299,7 +305,11 @@ export async function execute(interaction) {
         return await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
       }
 
-      pendingRevocations.set(interaction.user.id, { key, reason });
+      pendingRevocations.set(interaction.user.id, {
+        key,
+        reason,
+        expiresAt: Date.now() + 5 * 60 * 1000,
+      });
 
       const confirmEmbed = createWarningEmbed(
         'Confirm Revocation',
@@ -397,5 +407,57 @@ export async function execute(interaction) {
       const errEmbed = createErrorEmbed('Query Failed', 'Unable to retrieve license list.');
       await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
     }
+    return;
+  }
+
+  // F. Bulk Generate Modal
+  if (subcommand === 'bulk') {
+    const modal = new ModalBuilder()
+      .setCustomId('bulk_generate_modal')
+      .setTitle('Bulk License Generation');
+
+    const pluginInput = new TextInputBuilder()
+      .setCustomId('plugin_slug')
+      .setLabel('Plugin Slug')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('e.g. my-plugin')
+      .setRequired(true);
+
+    const userIdsInput = new TextInputBuilder()
+      .setCustomId('user_ids')
+      .setLabel('Discord User IDs (one per line)')
+      .setStyle(TextInputStyle.Paragraph)
+      .setPlaceholder('e.g.\n123456789012345678\n987654321098765432')
+      .setRequired(true);
+
+    const typeInput = new TextInputBuilder()
+      .setCustomId('license_type')
+      .setLabel('License Type (lifetime, subscription, trial)')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('lifetime')
+      .setRequired(true);
+
+    const durationInput = new TextInputBuilder()
+      .setCustomId('duration')
+      .setLabel('Duration (e.g. 30d, 90d) — ignored for lifetime')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(false);
+
+    const maxIpsInput = new TextInputBuilder()
+      .setCustomId('max_ips')
+      .setLabel('Max IPs (default: 1)')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(false);
+
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(pluginInput),
+      new ActionRowBuilder().addComponents(userIdsInput),
+      new ActionRowBuilder().addComponents(typeInput),
+      new ActionRowBuilder().addComponents(durationInput),
+      new ActionRowBuilder().addComponents(maxIpsInput),
+    );
+
+    await interaction.showModal(modal);
+    return;
   }
 }

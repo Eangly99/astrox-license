@@ -97,31 +97,4 @@ export function createLicenseCreatedEmbed(license, rawKey) {
     .setTimestamp();
 }
 
-/**
- * Create verification handshake result preview.
- */
-export function createVerifyEmbed(result) {
-  const isOk = result.valid;
-  const embed = new EmbedBuilder()
-    .setTitle(isOk ? 'License Verification Successful' : 'License Verification Failed')
-    .setColor(isOk ? Colors.SUCCESS : Colors.DANGER)
-    .setTimestamp()
-    .setFooter({ text: '• AstroX License' });
 
-  if (isOk) {
-    embed.setDescription('The client plugin verified successfully and received a valid token.');
-    if (result.token) {
-      embed.addFields({
-        name: 'Verification Token (JWT)',
-        value: codeBlock(maskKey(result.token)),
-        inline: false,
-      });
-    }
-  } else {
-    embed.setDescription(
-      `Handshake failed:\n${blockQuote(result.reason || 'Verification check rejected.')}`,
-    );
-  }
-
-  return embed;
-}

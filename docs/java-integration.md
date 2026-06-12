@@ -274,20 +274,25 @@ public class ExamplePlugin extends JavaPlugin {
 
         this.licenseManager = new LicenseManager(this, apiUrl, licenseKey, pluginId);
 
-        // Perform initial validation synchronously on main thread boot, or asynchronously with a blocking join
-        try {
-            boolean valid = licenseManager.validate().join();
+        // Perform initial validation asynchronously to avoid blocking the main server thread during boot
+        licenseManager.validate().thenAccept(valid -> {
             if (!valid) {
                 getLogger().severe("License validation failed. Shutting down plugin.");
-                getServer().getPluginManager().disablePlugin(this);
+                // Deactivation must happen on the main server thread
+                Bukkit.getScheduler().runTask(this, () -> {
+                    getServer().getPluginManager().disablePlugin(this);
+                });
                 return;
             }
-            getLogger().info("License validated successfully. Thank you for purchased!");
-        } catch (Exception e) {
+            getLogger().info("License validated successfully. Thank you for your purchase!");
+        }).exceptionally(err -> {
             getLogger().severe("Failed to reach verification servers during boot. Disabling.");
-            getServer().getPluginManager().disablePlugin(this);
-            return;
-        }
+            // Deactivation must happen on the main server thread
+            Bukkit.getScheduler().runTask(this, () -> {
+                getServer().getPluginManager().disablePlugin(this);
+            });
+            return null;
+        });
 
         // Start asynchronous runtime check heartbeat (e.g. check every 10 minutes)
         startHeartbeatScheduler();

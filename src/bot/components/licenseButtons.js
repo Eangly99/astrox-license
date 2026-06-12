@@ -171,9 +171,9 @@ export async function handleButton(interaction) {
     return;
   }
 
-  // 4. Paginate License List (list:ownerId:pluginId:status:page)
-  if (customId.startsWith('list:')) {
-    const [_, rawOwnerId, rawPluginId, rawStatus, pageStr] = customId.split(':');
+  // 4. Paginate License List (list|ownerId|pluginId|status|page)
+  if (customId.startsWith('list|')) {
+    const [_, rawOwnerId, rawPluginId, rawStatus, pageStr] = customId.split('|');
     const ownerId = rawOwnerId || null;
     const pluginId = rawPluginId || null;
     const status = rawStatus || null;
@@ -196,12 +196,12 @@ export async function handleButton(interaction) {
       // Create updated buttons
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId(`list:${ownerId || ''}:${pluginId || ''}:${status || ''}:${page - 1}`)
+          .setCustomId(`list|${ownerId || ''}|${pluginId || ''}|${status || ''}|${page - 1}`)
           .setLabel('◀ Previous')
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(page <= 1),
         new ButtonBuilder()
-          .setCustomId(`list:${ownerId || ''}:${pluginId || ''}:${status || ''}:${page + 1}`)
+          .setCustomId(`list|${ownerId || ''}|${pluginId || ''}|${status || ''}|${page + 1}`)
           .setLabel('Next ▶')
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(page >= totalPages),
@@ -214,9 +214,9 @@ export async function handleButton(interaction) {
     return;
   }
 
-  // 5. Paginate Audit Log (audit:actorId:action:page)
-  if (customId.startsWith('audit:')) {
-    const [_, rawActorId, rawAction, pageStr] = customId.split(':');
+  // 5. Paginate Audit Log (audit|actorId|action|page)
+  if (customId.startsWith('audit|')) {
+    const [_, rawActorId, rawAction, pageStr] = customId.split('|');
     const actorId = rawActorId || null;
     const action = rawAction || null;
     let page = parseInt(pageStr, 10) || 1;
@@ -237,12 +237,12 @@ export async function handleButton(interaction) {
 
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId(`audit:${actorId || ''}:${action || ''}:${page - 1}`)
+          .setCustomId(`audit|${actorId || ''}|${action || ''}|${page - 1}`)
           .setLabel('◀ Previous')
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(page <= 1),
         new ButtonBuilder()
-          .setCustomId(`audit:${actorId || ''}:${action || ''}:${page + 1}`)
+          .setCustomId(`audit|${actorId || ''}|${action || ''}|${page + 1}`)
           .setLabel('Next ▶')
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(page >= totalPages),

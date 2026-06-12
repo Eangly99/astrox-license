@@ -12,6 +12,7 @@ import { cacheService } from '../../services/cacheService.js';
 import { LICENSE_STATUS, AUDIT_ACTIONS } from '../../utils/constants.js';
 import { createLicenseEmbed } from '../embeds/licenseEmbeds.js';
 import { createErrorEmbed, createInfoEmbed } from '../embeds/commonEmbeds.js';
+import { maskKey } from '../../utils/formatters.js';
 
 export const data = new SlashCommandBuilder()
   .setName('mylicense')
@@ -33,10 +34,19 @@ export async function execute(interaction) {
         { key: { $in: expiredKeys } },
         { $set: { status: LICENSE_STATUS.EXPIRED } }
       );
+
+      const auditLogsToCreate = expiredLicenses.map((license) => ({
+        action: AUDIT_ACTIONS.EXPIRE,
+        actorId: 'system',
+        targetKey: license.key ? maskKey(license.key) : null,
+        details: { reason: 'License expired' },
+      }));
+
+      if (auditLogsToCreate.length > 0) {
+        await AuditLog.insertMany(auditLogsToCreate);
+      }
+
       for (const license of expiredLicenses) {
-        await AuditLog.log(AUDIT_ACTIONS.EXPIRE, 'system', license.key, {
-          reason: 'License expired',
-        });
         if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
           for (const keyToDel of license.activeCacheKeys) {
             await cacheService.delete(keyToDel);

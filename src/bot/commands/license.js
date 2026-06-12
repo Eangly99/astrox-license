@@ -387,12 +387,12 @@ export async function execute(interaction) {
 
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId(`list:${ownerId || ''}:${pluginId || ''}:${status || ''}:${page - 1}`)
+          .setCustomId(`list|${ownerId || ''}|${pluginId || ''}|${status || ''}|${page - 1}`)
           .setLabel('◀ Previous')
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(page <= 1),
         new ButtonBuilder()
-          .setCustomId(`list:${ownerId || ''}:${pluginId || ''}:${status || ''}:${page + 1}`)
+          .setCustomId(`list|${ownerId || ''}|${pluginId || ''}|${status || ''}|${page + 1}`)
           .setLabel('Next ▶')
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(page >= totalPages),

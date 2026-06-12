@@ -275,6 +275,9 @@ export async function validateLicense({ licenseKey, pluginId, serverIp, hwid }) 
   if (!license.activeCacheKeys.includes(cacheKey)) {
     license.activeCacheKeys.push(cacheKey);
   }
+  while (license.activeCacheKeys.length > 20) {
+    license.activeCacheKeys.shift();
+  }
   await license.save();
 
   // 11. Create signed token (JWT)
@@ -318,7 +321,6 @@ export async function revokeLicense(key, actorId, reason = 'No reason provided')
   await cacheService.delete('stats:dashboard');
 
   await AuditLog.log(AUDIT_ACTIONS.REVOKE, actorId, key, { reason });
-  await cacheService.delete(`validate:${key}`);
 
   log.info({ key: maskKey(key) }, 'License successfully revoked');
   return license;
@@ -395,7 +397,6 @@ export async function suspendLicense(key, actorId, reason = 'No reason provided'
   await cacheService.delete('stats:dashboard');
 
   await AuditLog.log(AUDIT_ACTIONS.SUSPEND, actorId, key, { reason });
-  await cacheService.delete(`validate:${key}`);
 
   return license;
 }
@@ -422,11 +423,20 @@ export async function listLicenses({ ownerId, pluginId, status, page = 1, limit 
 
     await cacheService.delete('stats:dashboard');
 
-    // Write audit logs and delete cache keys for all expired licenses
+    // Bulk insert audit logs
+    const auditLogsToCreate = expiredLicenses.map((license) => ({
+      action: AUDIT_ACTIONS.EXPIRE,
+      actorId: 'system',
+      targetKey: license.key ? maskKey(license.key) : null,
+      details: { reason: 'License expired' },
+    }));
+
+    if (auditLogsToCreate.length > 0) {
+      await AuditLog.insertMany(auditLogsToCreate);
+    }
+
+    // Delete cache keys for all expired licenses
     for (const license of expiredLicenses) {
-      await AuditLog.log(AUDIT_ACTIONS.EXPIRE, 'system', license.key, {
-        reason: 'License expired',
-      });
       if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
         for (const keyToDel of license.activeCacheKeys) {
           await cacheService.delete(keyToDel);

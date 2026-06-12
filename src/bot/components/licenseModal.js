@@ -17,7 +17,11 @@ export async function handleModal(interaction) {
 
   if (customId.startsWith('my_ips_modal:')) {
     const key = customId.substring('my_ips_modal:'.length);
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    } catch (err) {
+      log.warn({ err }, 'Failed to defer reply for IP update modal');
+    }
 
     const rawIps = interaction.fields.getTextInputValue('allowed_ips_input');
     const ips = rawIps
@@ -51,7 +55,11 @@ export async function handleModal(interaction) {
 
   if (customId !== 'bulk_generate_modal') return;
 
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  try {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  } catch (err) {
+    log.warn({ err }, 'Failed to defer reply for bulk generate modal');
+  }
 
   const pluginSlug = interaction.fields.getTextInputValue('plugin_slug').trim().toLowerCase();
   const rawUserIds = interaction.fields.getTextInputValue('user_ids');

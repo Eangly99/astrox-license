@@ -220,12 +220,12 @@ export async function execute(interaction) {
 
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId(`audit:${actorId || ''}:${action || ''}:${page - 1}`)
+          .setCustomId(`audit|${actorId || ''}|${action || ''}|${page - 1}`)
           .setLabel('◀ Previous')
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(page <= 1),
         new ButtonBuilder()
-          .setCustomId(`audit:${actorId || ''}:${action || ''}:${page + 1}`)
+          .setCustomId(`audit|${actorId || ''}|${action || ''}|${page + 1}`)
           .setLabel('Next ▶')
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(page >= totalPages),

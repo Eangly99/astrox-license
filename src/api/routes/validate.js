@@ -1,4 +1,3 @@
-import { validateRequestSchema } from '../../utils/validators.js';
 import { validateLicense } from '../../services/licenseService.js';
 import { createLogger } from '../../utils/logger.js';
 import { maskKey } from '../../utils/formatters.js';
@@ -10,17 +9,70 @@ const log = createLogger('api-validate');
  * @param {import('fastify').FastifyInstance} fastify
  */
 export default async function (fastify) {
-  fastify.post('/api/v1/validate', async (request, reply) => {
-    const { body, ip } = request;
-
-    // 1. Zod input validation
-    const parsed = validateRequestSchema.safeParse(body);
-    if (!parsed.success) {
-      log.warn({ err: parsed.error.format(), ip }, 'Malformed validation request schema rejected');
-      return reply.code(400).send({ error: 'Invalid request' });
-    }
-
-    const { licenseKey, pluginId, serverIp, hwid } = parsed.data;
+  fastify.post(
+    '/api/v1/validate',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['licenseKey', 'pluginId', 'serverIp', 'hwid'],
+          properties: {
+            licenseKey: { type: 'string', minLength: 1 },
+            pluginId: { type: 'string', minLength: 1 },
+            serverIp: {
+              type: 'string',
+              pattern: '^((25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)$',
+            },
+            hwid: { type: 'string', minLength: 8, maxLength: 128 },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              status: { type: 'string' },
+              token: { type: 'string' },
+            },
+            required: ['status', 'token'],
+          },
+          400: {
+            type: 'object',
+            properties: {
+              error: { type: 'string' },
+            },
+            required: ['error'],
+          },
+          403: {
+            type: 'object',
+            properties: {
+              status: { type: 'string' },
+              error: { type: 'string' },
+            },
+            required: ['status', 'error'],
+          },
+          500: {
+            type: 'object',
+            properties: {
+              error: { type: 'string' },
+            },
+            required: ['error'],
+          },
+        },
+      },
+      errorHandler: (error, request, reply) => {
+        if (error.validation) {
+          log.warn(
+            { err: error.validation, ip: request.ip },
+            'Malformed validation request schema rejected',
+          );
+          return reply.code(400).send({ error: 'Invalid request' });
+        }
+        reply.send(error);
+      },
+    },
+    async (request, reply) => {
+      const { licenseKey, pluginId, serverIp, hwid } = request.body;
+      const { ip } = request;
 
     try {
       log.info(

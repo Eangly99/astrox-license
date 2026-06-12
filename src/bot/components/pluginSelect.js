@@ -63,13 +63,5 @@ export async function handleSelect(interaction) {
     return;
   }
 
-  if (customId.startsWith('plugin_select:')) {
-    const embed = createSuccessEmbed(
-      'Plugins Selected',
-      `You selected the following items:\n${values.map((v) => `• \`${v}\``).join('\n')}`,
-    );
-    return await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
-  }
-
   log.warn({ customId }, 'Unrouted select menu interaction');
 }

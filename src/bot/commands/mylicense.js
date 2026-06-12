@@ -23,7 +23,23 @@ export async function execute(interaction) {
       .populate('pluginId')
       .sort({ createdAt: -1 });
 
-    if (!licenses || licenses.length === 0) {
+    const activeLicenses = [];
+    for (const lic of licenses) {
+      if (
+        lic.expiresAt &&
+        new Date() > lic.expiresAt &&
+        lic.status !== 'expired' &&
+        lic.status !== 'revoked'
+      ) {
+        lic.status = 'expired';
+        await lic.save();
+      }
+      if (lic.status === 'active' || lic.status === 'suspended') {
+        activeLicenses.push(lic);
+      }
+    }
+
+    if (!activeLicenses || activeLicenses.length === 0) {
       const errEmbed = createErrorEmbed(
         'No Licenses Found',
         "We couldn't find any active or suspended licenses associated with your Discord account.",
@@ -31,8 +47,8 @@ export async function execute(interaction) {
       return await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
     }
 
-    if (licenses.length === 1) {
-      const license = licenses[0];
+    if (activeLicenses.length === 1) {
+      const license = activeLicenses[0];
       const embed = createLicenseEmbed(license);
 
       const row = new ActionRowBuilder().addComponents(
@@ -63,7 +79,7 @@ export async function execute(interaction) {
       .setCustomId('my_select_license')
       .setPlaceholder('Select a plugin license...')
       .addOptions(
-        licenses.map((lic) => {
+        activeLicenses.map((lic) => {
           const maskedKey = lic.key.substring(lic.key.length - 8);
           const name = lic.pluginId?.name || 'Unknown Plugin';
           return {

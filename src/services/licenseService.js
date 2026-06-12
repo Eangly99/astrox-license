@@ -333,20 +333,37 @@ export async function listLicenses({ ownerId, pluginId, status, page = 1, limit 
   if (pluginId) query.pluginId = pluginId;
   if (status) query.status = status;
 
-  const total = await License.countDocuments(query);
+  const licenses = await License.find(query).populate('pluginId').sort({ createdAt: -1 });
+
+  const processed = [];
+  for (const license of licenses) {
+    if (
+      license.expiresAt &&
+      new Date() > license.expiresAt &&
+      license.status !== LICENSE_STATUS.EXPIRED &&
+      license.status !== LICENSE_STATUS.REVOKED
+    ) {
+      license.status = LICENSE_STATUS.EXPIRED;
+      await license.save();
+      await AuditLog.log(AUDIT_ACTIONS.SUSPEND, 'system', license.key, {
+        reason: 'License expired',
+      });
+    }
+
+    if (!status || license.status === status) {
+      processed.push(license.toObject());
+    }
+  }
+
+  const total = processed.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const currentPage = Math.min(page, totalPages);
   const skip = (currentPage - 1) * limit;
 
-  const licenses = await License.find(query)
-    .populate('pluginId')
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(limit)
-    .lean();
+  const paginated = processed.slice(skip, skip + limit);
 
   return {
-    licenses,
+    licenses: paginated,
     total,
     page: currentPage,
     totalPages,
@@ -357,7 +374,21 @@ export async function listLicenses({ ownerId, pluginId, status, page = 1, limit 
  * Get license details by full key.
  */
 export async function getLicenseByKey(key) {
-  return await License.findOne({ key }).populate('pluginId').lean();
+  const license = await License.findOne({ key }).populate('pluginId');
+  if (
+    license &&
+    license.expiresAt &&
+    new Date() > license.expiresAt &&
+    license.status !== LICENSE_STATUS.EXPIRED &&
+    license.status !== LICENSE_STATUS.REVOKED
+  ) {
+    license.status = LICENSE_STATUS.EXPIRED;
+    await license.save();
+    await AuditLog.log(AUDIT_ACTIONS.SUSPEND, 'system', license.key, {
+      reason: 'License expired',
+    });
+  }
+  return license ? license.toObject() : null;
 }
 
 /**

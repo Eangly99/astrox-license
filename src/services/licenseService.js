@@ -75,6 +75,73 @@ export async function createLicense(
 }
 
 /**
+ * Synchronize and transition expired licenses to EXPIRED state in bulk.
+ */
+export async function syncExpiredLicenses(ownerId = null) {
+  const query = {
+    expiresAt: { $lt: new Date() },
+    status: { $nin: [LICENSE_STATUS.EXPIRED, LICENSE_STATUS.REVOKED] },
+  };
+  if (ownerId) {
+    query.ownerId = ownerId;
+  }
+
+  const expiredLicenses = await License.find(query);
+  if (expiredLicenses.length > 0) {
+    const expiredKeys = expiredLicenses.map((l) => l.key);
+    
+    // Bulk update status in DB
+    await License.updateMany(
+      { key: { $in: expiredKeys } },
+      { $set: { status: LICENSE_STATUS.EXPIRED } }
+    );
+
+    await cacheService.delete('stats:dashboard');
+
+    // Bulk insert audit logs
+    const auditLogsToCreate = expiredLicenses.map((license) => ({
+      action: AUDIT_ACTIONS.EXPIRE,
+      actorId: 'system',
+      targetKey: license.key ? maskKey(license.key) : null,
+      details: { reason: 'License expired' },
+    }));
+
+    if (auditLogsToCreate.length > 0) {
+      await AuditLog.insertMany(auditLogsToCreate);
+    }
+
+    // Delete cache keys for all expired licenses
+    for (const license of expiredLicenses) {
+      if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
+        for (const keyToDel of license.activeCacheKeys) {
+          await cacheService.delete(keyToDel);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Transition a single license to EXPIRED state, saving it and logging to audit.
+ */
+export async function expireIndividualLicense(license) {
+  if (license.status !== LICENSE_STATUS.EXPIRED) {
+    license.status = LICENSE_STATUS.EXPIRED;
+    if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
+      for (const keyToDel of license.activeCacheKeys) {
+        await cacheService.delete(keyToDel);
+      }
+      license.activeCacheKeys = [];
+    }
+    await license.save();
+    await cacheService.delete('stats:dashboard');
+    await AuditLog.log(AUDIT_ACTIONS.EXPIRE, 'system', license.key, {
+      reason: 'License expired',
+    });
+  }
+}
+
+/**
  * Validate a license during handshake.
  */
 export async function validateLicense({ licenseKey, pluginId, serverIp, hwid }) {
@@ -154,21 +221,7 @@ export async function validateLicense({ licenseKey, pluginId, serverIp, hwid }) 
   }
 
   if (license.expiresAt && new Date() > license.expiresAt) {
-    if (license.status !== LICENSE_STATUS.EXPIRED) {
-      license.status = LICENSE_STATUS.EXPIRED;
-      // Evict validation cache entries
-      if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
-        for (const keyToDel of license.activeCacheKeys) {
-          await cacheService.delete(keyToDel);
-        }
-        license.activeCacheKeys = [];
-      }
-      await license.save();
-      await cacheService.delete('stats:dashboard');
-      await AuditLog.log(AUDIT_ACTIONS.EXPIRE, 'system', licenseKey, {
-        reason: 'License expired',
-      });
-    }
+    await expireIndividualLicense(license);
     return { valid: false, reason: 'License has expired' };
   }
 
@@ -288,7 +341,14 @@ export async function validateLicense({ licenseKey, pluginId, serverIp, hwid }) 
     hwid: hashedHwid,
   });
 
-  const result = { valid: true, token };
+  const result = {
+    valid: true,
+    token,
+    discord: {
+      ownerId: license.ownerId,
+      ownerTag: license.ownerTag,
+    },
+  };
 
   // 12. Cache verification success (60s TTL)
   await cacheService.set(cacheKey, result, 60000);
@@ -406,44 +466,7 @@ export async function suspendLicense(key, actorId, reason = 'No reason provided'
  */
 export async function listLicenses({ ownerId, pluginId, status, page = 1, limit = 10 }) {
   // 1. Bulk update expired licenses to avoid N+1 writes
-  const now = new Date();
-  const expiredLicenses = await License.find({
-    expiresAt: { $lt: now },
-    status: { $nin: [LICENSE_STATUS.EXPIRED, LICENSE_STATUS.REVOKED] },
-  });
-
-  if (expiredLicenses.length > 0) {
-    const expiredKeys = expiredLicenses.map((l) => l.key);
-    
-    // Bulk update status in DB
-    await License.updateMany(
-      { key: { $in: expiredKeys } },
-      { $set: { status: LICENSE_STATUS.EXPIRED } }
-    );
-
-    await cacheService.delete('stats:dashboard');
-
-    // Bulk insert audit logs
-    const auditLogsToCreate = expiredLicenses.map((license) => ({
-      action: AUDIT_ACTIONS.EXPIRE,
-      actorId: 'system',
-      targetKey: license.key ? maskKey(license.key) : null,
-      details: { reason: 'License expired' },
-    }));
-
-    if (auditLogsToCreate.length > 0) {
-      await AuditLog.insertMany(auditLogsToCreate);
-    }
-
-    // Delete cache keys for all expired licenses
-    for (const license of expiredLicenses) {
-      if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
-        for (const keyToDel of license.activeCacheKeys) {
-          await cacheService.delete(keyToDel);
-        }
-      }
-    }
-  }
+  await syncExpiredLicenses();
 
   // 2. Build pagination query
   const query = {};
@@ -475,26 +498,8 @@ export async function listLicenses({ ownerId, pluginId, status, page = 1, limit 
  */
 export async function getLicenseByKey(key) {
   const license = await License.findOne({ key }).populate('pluginId');
-  if (
-    license &&
-    license.expiresAt &&
-    new Date() > license.expiresAt &&
-    license.status !== LICENSE_STATUS.EXPIRED &&
-    license.status !== LICENSE_STATUS.REVOKED
-  ) {
-    license.status = LICENSE_STATUS.EXPIRED;
-    // Clear active validation caches
-    if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
-      for (const keyToDel of license.activeCacheKeys) {
-        await cacheService.delete(keyToDel);
-      }
-      license.activeCacheKeys = [];
-    }
-    await license.save();
-    await cacheService.delete('stats:dashboard');
-    await AuditLog.log(AUDIT_ACTIONS.EXPIRE, 'system', license.key, {
-      reason: 'License expired',
-    });
+  if (license && license.expiresAt && new Date() > license.expiresAt) {
+    await expireIndividualLicense(license);
   }
   return license ? license.toObject() : null;
 }
@@ -624,7 +629,14 @@ export async function addBlacklist({ type, value, reason }, actorId) {
 
   // Clear specific validation cache if key is blocked
   if (type === BLACKLIST_TYPES.KEY) {
-    await cacheService.delete(`validate:${value}`);
+    const license = await License.findOne({ key: value });
+    if (license && license.activeCacheKeys?.length > 0) {
+      for (const keyToDel of license.activeCacheKeys) {
+        await cacheService.delete(keyToDel);
+      }
+      license.activeCacheKeys = [];
+      await license.save();
+    }
   }
   // Clear blacklist cache set
   await cacheService.delete('blacklist:all');

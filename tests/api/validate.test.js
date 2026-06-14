@@ -67,6 +67,9 @@ describe('API Route Validation Tests', () => {
     const body = JSON.parse(response.body);
     expect(body.status).toBe('valid');
     expect(body.token).toBeTypeOf('string');
+    expect(body.discord).toBeDefined();
+    expect(body.discord.ownerId).toBe('54321');
+    expect(body.discord.ownerTag).toBe('ApiOwner#1111');
   });
 
   it('should return 403 Forbidden for invalid key signatures', async () => {

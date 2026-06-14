@@ -32,8 +32,16 @@ export default async function (fastify) {
             properties: {
               status: { type: 'string' },
               token: { type: 'string' },
+              discord: {
+                type: 'object',
+                properties: {
+                  ownerId: { type: 'string' },
+                  ownerTag: { type: 'string' },
+                },
+                required: ['ownerId', 'ownerTag'],
+              },
             },
-            required: ['status', 'token'],
+            required: ['status', 'token', 'discord'],
           },
           400: {
             type: 'object',
@@ -98,6 +106,10 @@ export default async function (fastify) {
         return reply.code(200).send({
           status: 'valid',
           token: result.token,
+          discord: {
+            ownerId: result.discord.ownerId,
+            ownerTag: result.discord.ownerTag,
+          },
         });
       }
 

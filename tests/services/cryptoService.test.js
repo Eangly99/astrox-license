@@ -23,7 +23,9 @@ describe('Crypto Service Tests', () => {
 
   it('should reject tampered keys', () => {
     const key = generateLicenseKey();
-    const tampered = `${key.slice(0, -1)}f`;
+    const lastChar = key.slice(-1);
+    const newLastChar = lastChar === 'a' ? 'b' : 'a';
+    const tampered = `${key.slice(0, -1)}${newLastChar}`;
     expect(verifyLicenseKey(tampered)).toBe(false);
     expect(verifyLicenseKey('invalid-key')).toBe(false);
   });

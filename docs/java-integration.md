@@ -219,6 +219,12 @@ public class LicenseManager {
                     this.validationToken = resJson.get("token").getAsString();
                     // Cache the success for 55 seconds (TTL on gateway cache is 60s)
                     this.tokenExpiry = System.currentTimeMillis() + 55000;
+
+                    if (resJson.has("discord")) {
+                        JsonObject discordObj = resJson.getAsJsonObject("discord");
+                        String ownerTag = discordObj.get("ownerTag").getAsString();
+                        plugin.getLogger().info("[License] Verification successful. Licensed to: " + ownerTag);
+                    }
                     return true;
                 } else if (status == 403) {
                     plugin.getLogger().severe("[License] Handshake failed: License is suspended, revoked, or invalid.");

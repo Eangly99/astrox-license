@@ -28,12 +28,16 @@ User-Agent: AstroXLicense-Handshake-Java
 
 ### Response (Success - 200 OK)
 
-Returns validation token (JWT expires in 60s) allowing local verification cache.
+Returns validation token (JWT expires in 60s) allowing local verification cache, along with the Discord details of the license owner.
 
 ```json
 {
   "status": "valid",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ey..."
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ey...",
+  "discord": {
+    "ownerId": "123456789012345678",
+    "ownerTag": "username"
+  }
 }
 ```
 

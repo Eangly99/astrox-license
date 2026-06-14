@@ -4,6 +4,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
+    fileParallelism: false,
+    maxWorkers: 1,
     coverage: {
       provider: 'v8',
       include: ['src/services/**', 'src/api/**'],

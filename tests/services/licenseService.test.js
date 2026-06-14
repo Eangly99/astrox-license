@@ -11,6 +11,7 @@ import {
   updateLicenseIps,
   revokeLicense,
   listLicenses,
+  addBlacklist,
 } from '../../src/services/licenseService.js';
 import { cacheService } from '../../src/services/cacheService.js';
 
@@ -85,6 +86,9 @@ describe('License Service Integration Tests', () => {
 
     expect(check.valid).toBe(true);
     expect(check.token).toBeTypeOf('string');
+    expect(check.discord).toBeDefined();
+    expect(check.discord.ownerId).toBe('987654321');
+    expect(check.discord.ownerTag).toBe('Owner#0000');
 
     // Confirm HWID lock is bound
     const updated = await License.findById(lic._id).lean();
@@ -312,6 +316,48 @@ describe('License Service Integration Tests', () => {
 
     // Revoke
     await revokeLicense(lic.key, 'admin_user_id', 'testing cache eviction');
+
+    // Verify cache is cleared
+    const cachedValAfter = await cacheService.get(cachedKey);
+    expect(cachedValAfter).toBeUndefined();
+  });
+
+  it('should evict cache keys when the license key is blacklisted', async () => {
+    const lic = await createLicense(
+      {
+        pluginId: mockPlugin._id.toString(),
+        ownerId: 'blacklist_user',
+        ownerTag: 'BlacklistOwner#0000',
+        type: 'lifetime',
+        maxIps: 1,
+      },
+      'admin_user_id',
+    );
+
+    const check = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '127.0.0.1',
+      hwid: 'hwid_blacklist_test',
+    });
+    expect(check.valid).toBe(true);
+
+    const fromDb = await License.findById(lic._id).lean();
+    expect(fromDb.activeCacheKeys).toHaveLength(1);
+    const cachedKey = fromDb.activeCacheKeys[0];
+
+    const cachedVal = await cacheService.get(cachedKey);
+    expect(cachedVal).toBeDefined();
+
+    // Blacklist the key
+    await addBlacklist(
+      {
+        type: 'key',
+        value: lic.key,
+        reason: 'malicious activity',
+      },
+      'admin_user_id',
+    );
 
     // Verify cache is cleared
     const cachedValAfter = await cacheService.get(cachedKey);

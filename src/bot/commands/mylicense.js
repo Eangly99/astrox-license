@@ -7,12 +7,10 @@ import {
   MessageFlags,
 } from 'discord.js';
 import License from '../../db/models/License.js';
-import AuditLog from '../../db/models/AuditLog.js';
-import { cacheService } from '../../services/cacheService.js';
-import { LICENSE_STATUS, AUDIT_ACTIONS } from '../../utils/constants.js';
+import { LICENSE_STATUS } from '../../utils/constants.js';
+import { syncExpiredLicenses } from '../../services/licenseService.js';
 import { createLicenseEmbed } from '../embeds/licenseEmbeds.js';
 import { createErrorEmbed, createInfoEmbed } from '../embeds/commonEmbeds.js';
-import { maskKey } from '../../utils/formatters.js';
 
 export const data = new SlashCommandBuilder()
   .setName('mylicense')
@@ -20,41 +18,8 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
   try {
-    const now = new Date();
     // 1. Bulk update expired licenses for this user
-    const expiredLicenses = await License.find({
-      ownerId: interaction.user.id,
-      expiresAt: { $lt: now },
-      status: { $nin: [LICENSE_STATUS.EXPIRED, LICENSE_STATUS.REVOKED] },
-    });
-
-    if (expiredLicenses.length > 0) {
-      const expiredKeys = expiredLicenses.map((l) => l.key);
-      await License.updateMany(
-        { key: { $in: expiredKeys } },
-        { $set: { status: LICENSE_STATUS.EXPIRED } }
-      );
-
-      const auditLogsToCreate = expiredLicenses.map((license) => ({
-        action: AUDIT_ACTIONS.EXPIRE,
-        actorId: 'system',
-        targetKey: license.key ? maskKey(license.key) : null,
-        details: { reason: 'License expired' },
-      }));
-
-      if (auditLogsToCreate.length > 0) {
-        await AuditLog.insertMany(auditLogsToCreate);
-      }
-
-      for (const license of expiredLicenses) {
-        if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
-          for (const keyToDel of license.activeCacheKeys) {
-            await cacheService.delete(keyToDel);
-          }
-        }
-      }
-      await cacheService.delete('stats:dashboard');
-    }
+    await syncExpiredLicenses(interaction.user.id);
 
     // 2. Fetch active and suspended licenses
     const activeLicenses = await License.find({

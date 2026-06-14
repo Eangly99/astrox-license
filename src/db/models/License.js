@@ -53,7 +53,7 @@ const licenseSchema = new Schema(
     expiresAt: {
       type: Date,
       default: null,
-      index: { expires: 0 }, // Document expires exactly at expiresAt
+      index: true,
     },
     activatedAt: {
       type: Date,

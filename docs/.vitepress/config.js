@@ -1,4 +1,6 @@
-export default {
+import { withMermaid } from 'vitepress-plugin-mermaid';
+
+export default withMermaid({
   base: '/astrox-license/',
   title: 'AstroX License',
   description: 'Developer Wiki & Documentation',
@@ -38,4 +40,4 @@ export default {
       provider: 'local',
     },
   },
-};
+});

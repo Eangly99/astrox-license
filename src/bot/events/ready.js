@@ -1,4 +1,4 @@
-import { Events, REST, Routes, ActivityType } from 'discord.js';
+import { Events, REST, Routes, ActivityType, EmbedBuilder } from 'discord.js';
 import { config } from '../../utils/config.js';
 import { createLogger } from '../../utils/logger.js';
 import License from '../../db/models/License.js';
@@ -21,6 +21,32 @@ export async function execute(client) {
     },
     'Bot connection established',
   );
+
+  // Send startup notification to Discord log channel if configured
+  try {
+    if (config.LOG_CHANNEL_ID) {
+      const channel = await client.channels.fetch(config.LOG_CHANNEL_ID);
+      if (channel && channel.isTextBased()) {
+        const startupEmbed = new EmbedBuilder()
+          .setTitle('🤖 System Online')
+          .setColor('#3498db')
+          .setDescription('AstroX Licensing bot has established gateway connection successfully.')
+          .addFields(
+            { name: 'Bot Tag', value: `\`${client.user.tag}\``, inline: true },
+            { name: 'Guilds Served', value: `\`${client.guilds.cache.size}\``, inline: true },
+            { name: 'Gateway Ping', value: `\`${client.ws.ping}ms\``, inline: true },
+          )
+          .setTimestamp();
+        await channel.send({ embeds: [startupEmbed] });
+        log.info(
+          { channelId: config.LOG_CHANNEL_ID },
+          'Bot startup status sent to Discord log channel',
+        );
+      }
+    }
+  } catch (err) {
+    log.error({ err }, 'Failed to send bot online status to Discord log channel');
+  }
 
   try {
     log.info('Syncing slash commands with Discord Gateway...');

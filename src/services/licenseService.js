@@ -2,12 +2,7 @@ import License from '../db/models/License.js';
 import Plugin from '../db/models/Plugin.js';
 import Blacklist from '../db/models/Blacklist.js';
 import AuditLog from '../db/models/AuditLog.js';
-import {
-  generateLicenseKey,
-  verifyLicenseKey,
-  signJwt,
-  hashHwid,
-} from './cryptoService.js';
+import { generateLicenseKey, verifyLicenseKey, signJwt, hashHwid } from './cryptoService.js';
 import { maskKey } from '../utils/formatters.js';
 import { cacheService } from './cacheService.js';
 import {
@@ -19,6 +14,7 @@ import {
   SHARED_DETECTION_WINDOW_MS,
 } from '../utils/constants.js';
 import { createLogger } from '../utils/logger.js';
+import { logValidationToDiscord } from './notificationService.js';
 
 const log = createLogger('license-service');
 
@@ -89,11 +85,11 @@ export async function syncExpiredLicenses(ownerId = null) {
   const expiredLicenses = await License.find(query);
   if (expiredLicenses.length > 0) {
     const expiredKeys = expiredLicenses.map((l) => l.key);
-    
+
     // Bulk update status in DB
     await License.updateMany(
       { key: { $in: expiredKeys } },
-      { $set: { status: LICENSE_STATUS.EXPIRED } }
+      { $set: { status: LICENSE_STATUS.EXPIRED } },
     );
 
     await cacheService.delete('stats:dashboard');
@@ -144,17 +140,29 @@ export async function expireIndividualLicense(license) {
 /**
  * Validate a license during handshake.
  */
-export async function validateLicense({ licenseKey, pluginId, serverIp, hwid }) {
-  const hashedHwid = hashHwid(hwid);
-  const cacheKey = `validate:${licenseKey}:${pluginId}:${serverIp}:${hashedHwid}`;
+export async function validateLicense(params) {
+  const hashedHwid = hashHwid(params.hwid);
+  const cacheKey = `validate:${params.licenseKey}:${params.pluginId}:${params.serverIp}:${hashedHwid}`;
 
   // 1. Check cache first
   const cached = await cacheService.get(cacheKey);
   if (cached) {
-    log.debug({ key: maskKey(licenseKey) }, 'License validation served from cache');
+    log.debug({ key: maskKey(params.licenseKey) }, 'License validation served from cache');
     return cached;
   }
 
+  // Execute validation pipeline
+  const result = await validateLicenseInternal(params, hashedHwid, cacheKey);
+
+  // Log validation asynchronously
+  logValidationToDiscord(params, result).catch((err) => {
+    log.error({ err }, 'Failed to process Discord log notification');
+  });
+
+  return result;
+}
+
+async function validateLicenseInternal({ licenseKey, pluginId, serverIp }, hashedHwid, cacheKey) {
   // 2. Verify HMAC signature
   if (!verifyLicenseKey(licenseKey)) {
     log.warn({ key: maskKey(licenseKey) }, 'License key failed cryptographic signature check');
@@ -247,7 +255,10 @@ export async function validateLicense({ licenseKey, pluginId, serverIp, hwid }) 
     } else {
       license.hwid = hashedHwid;
       license.activatedAt = hwidUpdatedLicense.activatedAt;
-      log.info({ key: maskKey(licenseKey), hwid: hashedHwid }, 'License bound to HWID on first use');
+      log.info(
+        { key: maskKey(licenseKey), hwid: hashedHwid },
+        'License bound to HWID on first use',
+      );
     }
   } else if (license.hwid !== hashedHwid) {
     log.warn(
@@ -258,31 +269,54 @@ export async function validateLicense({ licenseKey, pluginId, serverIp, hwid }) 
   }
 
   // 8. Whitelist IP or check limit
-  // Atomic IP update with maximum bounds verification to prevent concurrency races
-  const updatedLicense = await License.findOneAndUpdate(
-    {
-      _id: license._id,
-      $or: [
-        { allowedIps: serverIp }, // Already exists
-        { [`allowedIps.${license.maxIps - 1}`]: { $exists: false } }, // Room available
-      ],
-    },
-    { $addToSet: { allowedIps: serverIp } },
-    { new: true },
-  );
+  let isIpAllowed = license.allowedIps.includes(serverIp);
+  let updatedLicense = null;
 
-  if (!updatedLicense) {
-    log.warn(
-      { key: maskKey(licenseKey), count: license.allowedIps.length, max: license.maxIps },
-      'IP limit exceeded during atomic whitelist update',
-    );
-    return { valid: false, reason: 'Maximum IP limit exceeded' };
+  if (!isIpAllowed) {
+    if (license.allowedIps.length < license.maxIps) {
+      // Room available, add it atomically
+      updatedLicense = await License.findOneAndUpdate(
+        {
+          _id: license._id,
+          [`allowedIps.${license.maxIps - 1}`]: { $exists: false },
+        },
+        { $addToSet: { allowedIps: serverIp } },
+        { new: true },
+      );
+      if (updatedLicense) {
+        license.allowedIps = updatedLicense.allowedIps;
+        isIpAllowed = true;
+        log.info({ key: maskKey(licenseKey), ip: serverIp }, 'New IP added to license whitelist');
+      }
+    } else if (license.hwid === hashedHwid) {
+      // IP limit exceeded, but HWID matches (same machine, dynamic IP change). Auto-rotate oldest IP.
+      const oldIps = [...license.allowedIps];
+      const newIps = [...oldIps];
+      newIps.shift(); // Remove oldest
+      newIps.push(serverIp); // Add new
+
+      updatedLicense = await License.findOneAndUpdate(
+        { _id: license._id, hwid: hashedHwid },
+        { $set: { allowedIps: newIps } },
+        { new: true },
+      );
+      if (updatedLicense) {
+        license.allowedIps = updatedLicense.allowedIps;
+        isIpAllowed = true;
+        log.info(
+          { key: maskKey(licenseKey), oldIps, newIps: license.allowedIps },
+          'IP automatically rotated due to matching HWID',
+        );
+      }
+    }
   }
 
-  const isNewIpAdded = !license.allowedIps.includes(serverIp);
-  license.allowedIps = updatedLicense.allowedIps;
-  if (isNewIpAdded) {
-    log.info({ key: maskKey(licenseKey), ip: serverIp }, 'New IP added to license whitelist');
+  if (!isIpAllowed) {
+    log.warn(
+      { key: maskKey(licenseKey), count: license.allowedIps.length, max: license.maxIps },
+      'IP limit exceeded during whitelist update',
+    );
+    return { valid: false, reason: 'Maximum IP limit exceeded' };
   }
 
   // 9. Shared detection check
@@ -462,6 +496,45 @@ export async function suspendLicense(key, actorId, reason = 'No reason provided'
 }
 
 /**
+ * Reactivate a suspended or expired license key.
+ */
+export async function reactivateLicense(key, actorId, reason = 'No reason provided') {
+  log.info({ key: maskKey(key), actorId }, 'Reactivating license...');
+
+  const license = await License.findOne({ key });
+  if (!license) {
+    throw new Error('License not found');
+  }
+
+  if (license.status === LICENSE_STATUS.ACTIVE) {
+    throw new Error('License is already active');
+  }
+
+  license.status = LICENSE_STATUS.ACTIVE;
+
+  // Reset validation IPs rolling window tracker on reactivation
+  if (license.metadata) {
+    license.metadata.delete('validationIps');
+  }
+
+  // Clear active validation caches
+  if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
+    for (const keyToDel of license.activeCacheKeys) {
+      await cacheService.delete(keyToDel);
+    }
+    license.activeCacheKeys = [];
+  }
+
+  await license.save();
+  await cacheService.delete('stats:dashboard');
+
+  await AuditLog.log(AUDIT_ACTIONS.REACTIVATE, actorId, key, { reason });
+
+  log.info({ key: maskKey(key) }, 'License successfully reactivated');
+  return license;
+}
+
+/**
  * List licenses with filters and pagination.
  */
 export async function listLicenses({ ownerId, pluginId, status, page = 1, limit = 10 }) {
@@ -595,6 +668,14 @@ export async function updateLicenseIps(key, ownerId, ips, actorId) {
   }
 
   const oldIps = [...license.allowedIps];
+
+  const ipsChanged = oldIps.length !== ips.length || !oldIps.every((ip, idx) => ip === ips[idx]);
+  if (ipsChanged) {
+    license.hwid = null;
+    license.activatedAt = null;
+    log.info({ key: maskKey(key) }, 'HWID lock reset due to whitelisted IPs list modification');
+  }
+
   license.allowedIps = ips;
 
   // Clear active validation caches
@@ -611,6 +692,7 @@ export async function updateLicenseIps(key, ownerId, ips, actorId) {
   await AuditLog.log(AUDIT_ACTIONS.UPDATE_IPS, actorId, key, {
     oldIps,
     newIps: ips,
+    hwidReset: ipsChanged,
   });
 
   // Clear validation cache prefix if possible

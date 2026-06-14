@@ -1,6 +1,6 @@
 import { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { createLogger } from '../../utils/logger.js';
-import { createSuccessEmbed, createErrorEmbed } from '../embeds/commonEmbeds.js';
+import { createErrorEmbed } from '../embeds/commonEmbeds.js';
 import { getLicenseByKey } from '../../services/licenseService.js';
 import { createLicenseEmbed } from '../embeds/licenseEmbeds.js';
 
@@ -57,6 +57,36 @@ export async function handleSelect(interaction) {
       }
     } catch (err) {
       log.error({ err }, 'Error handling my_select_license selection');
+      const errorEmbed = createErrorEmbed('Error', 'Unable to retrieve license details.');
+      await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+    }
+    return;
+  }
+
+  if (customId === 'review_select_license') {
+    const key = values[0];
+    try {
+      const license = await getLicenseByKey(key);
+      if (!license) {
+        const errorEmbed = createErrorEmbed('Not Found', 'The selected license no longer exists.');
+        return await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+      }
+
+      const embed = createLicenseEmbed(license);
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`review_reactivate:${license.key}`)
+          .setLabel('🔓 Reactivate License')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`review_revoke:${license.key}`)
+          .setLabel('❌ Revoke License')
+          .setStyle(ButtonStyle.Danger),
+      );
+
+      await interaction.update({ embeds: [embed], components: [row] });
+    } catch (err) {
+      log.error({ err }, 'Error handling review_select_license selection');
       const errorEmbed = createErrorEmbed('Error', 'Unable to retrieve license details.');
       await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
     }

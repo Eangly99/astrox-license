@@ -14,7 +14,12 @@ export const generateLicenseSchema = z.object({
 export const validateRequestSchema = z.object({
   licenseKey: z.string().min(1),
   pluginId: z.string().min(1),
-  serverIp: z.string().regex(/^((25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(25[0-5]|2[0-4]\d|[01]?\d\d?)$/, 'Invalid IPv4 address'),
+  serverIp: z
+    .string()
+    .regex(
+      /^((25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(25[0-5]|2[0-4]\d|[01]?\d\d?)$/,
+      'Invalid IPv4 address',
+    ),
   hwid: z.string().min(8).max(128),
 });
 

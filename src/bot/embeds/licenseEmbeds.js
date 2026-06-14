@@ -96,5 +96,3 @@ export function createLicenseCreatedEmbed(license, rawKey) {
     .setFooter({ text: '• AstroX License' })
     .setTimestamp();
 }
-
-

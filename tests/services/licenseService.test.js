@@ -12,6 +12,7 @@ import {
   revokeLicense,
   listLicenses,
   addBlacklist,
+  reactivateLicense,
 } from '../../src/services/licenseService.js';
 import { cacheService } from '../../src/services/cacheService.js';
 
@@ -127,7 +128,7 @@ describe('License Service Integration Tests', () => {
     expect(check.reason).toContain('Hardware ID binding mismatch');
   });
 
-  it('should reject validation if IP limit exceeded', async () => {
+  it('should automatically rotate IP when IP limit reached but HWID matches', async () => {
     const lic = await createLicense(
       {
         pluginId: mockPlugin._id.toString(),
@@ -148,15 +149,17 @@ describe('License Service Integration Tests', () => {
     });
     expect(check1.valid).toBe(true);
 
-    // Validate second IP (Fails IP quota)
+    // Validate second IP (Succeeds via rotation because HWID matches)
     const check2 = await validateLicense({
       licenseKey: lic.key,
       pluginId: 'test-plugin',
       serverIp: '192.168.1.2',
       hwid: 'original_hwid',
     });
-    expect(check2.valid).toBe(false);
-    expect(check2.reason).toContain('IP limit exceeded');
+    expect(check2.valid).toBe(true);
+
+    const updated = await License.findById(lic._id).lean();
+    expect(updated.allowedIps).toEqual(['192.168.1.2']);
   });
 
   it('should suspend license if shared validation exceeds threshold', async () => {
@@ -370,7 +373,7 @@ describe('License Service Integration Tests', () => {
 
     // Create 3 licenses, 2 expired but status set to active initially in DB
     const now = Date.now();
-    
+
     // We create licenses via createLicense to ensure they have valid cryptographic keys
     const lic1 = await createLicense(
       {
@@ -449,7 +452,7 @@ describe('License Service Integration Tests', () => {
       serverIp: '127.0.0.1',
       hwid: 'first_hwid_bind_attempt',
     });
-    
+
     const res2 = await validateLicense({
       licenseKey: lic.key,
       pluginId: 'test-plugin',
@@ -460,5 +463,106 @@ describe('License Service Integration Tests', () => {
     expect(res1.valid).toBe(true);
     expect(res2.valid).toBe(false);
     expect(res2.reason).toContain('Hardware ID binding mismatch');
+  });
+
+  it('should reset HWID lock when whitelisted IPs are updated', async () => {
+    const lic = await createLicense(
+      {
+        pluginId: mockPlugin._id.toString(),
+        ownerId: 'ip_update_user',
+        ownerTag: 'IpOwner#0000',
+        type: 'lifetime',
+        maxIps: 1,
+      },
+      'admin_user_id',
+    );
+
+    // Bind HWID first
+    await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '127.0.0.1',
+      hwid: 'hwid_original_lock',
+    });
+
+    const bound = await License.findById(lic._id).lean();
+    expect(bound.hwid).not.toBeNull();
+
+    // Update IP -> should reset HWID lock
+    await updateLicenseIps(lic.key, 'ip_update_user', ['1.2.3.4'], 'ip_update_user');
+
+    const reset = await License.findById(lic._id).lean();
+    expect(reset.hwid).toBeNull();
+    expect(reset.activatedAt).toBeNull();
+  });
+
+  it('should automatically rotate oldest IP when whitelist is full but HWID matches', async () => {
+    const lic = await createLicense(
+      {
+        pluginId: mockPlugin._id.toString(),
+        ownerId: 'ip_rotate_user',
+        ownerTag: 'IpRotate#0000',
+        type: 'lifetime',
+        maxIps: 2,
+      },
+      'admin_user_id',
+    );
+
+    // Bind HWID and IP 1
+    await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '1.1.1.1',
+      hwid: 'same_hwid_device',
+    });
+
+    // Bind IP 2
+    await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '2.2.2.2',
+      hwid: 'same_hwid_device',
+    });
+
+    const full = await License.findById(lic._id).lean();
+    expect(full.allowedIps).toEqual(['1.1.1.1', '2.2.2.2']);
+
+    // Validate from new IP 3 on the same device -> should rotate oldest IP ('1.1.1.1') out
+    const res = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '3.3.3.3',
+      hwid: 'same_hwid_device',
+    });
+
+    expect(res.valid).toBe(true);
+    const rotated = await License.findById(lic._id).lean();
+    expect(rotated.allowedIps).toEqual(['2.2.2.2', '3.3.3.3']);
+  });
+
+  it('should reactivate a suspended license', async () => {
+    const lic = await createLicense(
+      {
+        pluginId: mockPlugin._id.toString(),
+        ownerId: 'reactivate_user',
+        ownerTag: 'Reactivate#0000',
+        type: 'lifetime',
+        maxIps: 1,
+      },
+      'admin_user_id',
+    );
+
+    // Suspend
+    lic.status = 'suspended';
+    await lic.save();
+
+    const check1 = await License.findById(lic._id).lean();
+    expect(check1.status).toBe('suspended');
+
+    // Reactivate
+    await reactivateLicense(lic.key, 'admin_user_id', 'testing reactivation');
+
+    const check2 = await License.findById(lic._id).lean();
+    expect(check2.status).toBe('active');
   });
 });

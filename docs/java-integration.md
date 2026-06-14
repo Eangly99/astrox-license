@@ -329,18 +329,22 @@ public class ExamplePlugin extends JavaPlugin {
 Java applications can be decompiled and modified easily. Layer your security to prevent simple crack attempts:
 
 > [!WARNING]
-> **Obfuscate String Constants:** 
+> **Obfuscate String Constants:**
 > Do not store your API endpoints or slugs in cleartext inside compiled classes. Modders can easily use utility tools like `strings` or JD-GUI to inspect your bytecode. Compile character arrays, apply XOR encoding, or fetch them dynamically to prevent simple string scans.
 
 ### 1. Bytecode Obfuscators
+
 Process the finished JAR file with a production obfuscator:
+
 - **ProGuard** (Free/Open Source)
 - **Zelix KlassMaster** (Commercial)
 
 Make sure to obfuscate all class and field names within your license modules, and strip attributes such as:
+
 - `SourceFile`
 - `LocalVariableTable`
 - `LineNumberTable`
 
 ### 2. Multi-Stage Checks
+
 Scatter validation checks into critical gameplay hooks (e.g., on player join or custom events). If validation returns `false` at any stage, quietly restrict plugin behaviors rather than immediately crashing, making it harder for crackers to identify where the security triggers are located.

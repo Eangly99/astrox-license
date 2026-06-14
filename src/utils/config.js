@@ -12,6 +12,7 @@ const envSchema = z.object({
   ADMIN_ROLE_ID: z.string().min(1, 'ADMIN_ROLE_ID is required'),
   MONGODB_URI: z.string().min(1, 'MONGODB_URI is required'),
   REDIS_URI: z.string().optional().default(''),
+  LOG_CHANNEL_ID: z.string().optional().default(''),
   HMAC_SECRET: z.string().min(32, 'HMAC_SECRET must be at least 32 characters'),
   API_PORT: z
     .string()

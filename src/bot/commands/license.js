@@ -9,6 +9,7 @@ import {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
+  StringSelectMenuBuilder,
 } from 'discord.js';
 import Plugin from '../../db/models/Plugin.js';
 import {
@@ -143,6 +144,9 @@ export const data = new SlashCommandBuilder()
   )
   .addSubcommand((sub) =>
     sub.setName('bulk').setDescription('Open modal to generate licenses in bulk'),
+  )
+  .addSubcommand((sub) =>
+    sub.setName('review').setDescription('Review and manage suspended licenses'),
   );
 
 /**
@@ -432,14 +436,14 @@ export async function execute(interaction) {
 
     const typeInput = new TextInputBuilder()
       .setCustomId('license_type')
-      .setLabel('License Type (lifetime, subscription, trial)')
+      .setLabel('Type (lifetime, subscription, trial)')
       .setStyle(TextInputStyle.Short)
       .setPlaceholder('lifetime')
       .setRequired(true);
 
     const durationInput = new TextInputBuilder()
       .setCustomId('duration')
-      .setLabel('Duration (e.g. 30d, 90d) — ignored for lifetime')
+      .setLabel('Duration (e.g. 30d) - Ignored for Lifetime')
       .setStyle(TextInputStyle.Short)
       .setRequired(false);
 
@@ -458,6 +462,52 @@ export async function execute(interaction) {
     );
 
     await interaction.showModal(modal);
+    return;
+  }
+
+  // G. Review Suspended Licenses
+  if (subcommand === 'review') {
+    try {
+      const { licenses } = await listLicenses({ status: 'suspended', page: 1, limit: 10 });
+      if (licenses.length === 0) {
+        const embed = createSuccessEmbed(
+          'Review Dashboard',
+          'There are no suspended licenses requiring review at this time.',
+        );
+        return await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+      }
+
+      const embed = createWarningEmbed(
+        'Suspended Licenses Review',
+        `Found **${licenses.length}** suspended licenses requiring audit. Select one to review.`,
+      );
+
+      const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId('review_select_license')
+        .setPlaceholder('Select a license to review...')
+        .addOptions(
+          licenses.map((lic) => {
+            const maskedKey = lic.key.substring(lic.key.length - 8);
+            const name = lic.pluginId?.name || 'Unknown Plugin';
+            return {
+              label: `${name} (..${maskedKey})`,
+              description: `Owner: ${lic.ownerTag} | IPs: ${lic.allowedIps.length}`,
+              value: lic.key,
+            };
+          }),
+        );
+
+      const row = new ActionRowBuilder().addComponents(selectMenu);
+
+      await interaction.reply({
+        embeds: [embed],
+        components: [row],
+        flags: MessageFlags.Ephemeral,
+      });
+    } catch (err) {
+      const errEmbed = createErrorEmbed('Query Failed', 'Unable to retrieve suspended licenses.');
+      await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
+    }
     return;
   }
 }

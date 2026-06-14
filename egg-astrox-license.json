@@ -15,7 +15,7 @@
   "file_denylist": [],
   "startup": "if [ ! -f .env ]; then touch .env; fi && if [ -f package.json ]; then npm install && npm start; else echo \"Missing package.json\"; exit 1; fi",
   "config": {
-    "files": "{\r\n    \".env\": {\r\n        \"parser\": \"properties\",\r\n        \"find\": {\r\n            \"BOT_TOKEN\": \"{{server.build.env.BOT_TOKEN}}\",\r\n            \"CLIENT_ID\": \"{{server.build.env.CLIENT_ID}}\",\r\n            \"GUILD_ID\": \"{{server.build.env.GUILD_ID}}\",\r\n            \"ADMIN_ROLE_ID\": \"{{server.build.env.ADMIN_ROLE_ID}}\",\r\n            \"MONGODB_URI\": \"{{server.build.env.MONGODB_URI}}\",\r\n            \"HMAC_SECRET\": \"{{server.build.env.HMAC_SECRET}}\",\r\n            \"API_PORT\": \"{{server.build.env.API_PORT}}\",\r\n            \"NODE_ENV\": \"{{server.build.env.NODE_ENV}}\"\r\n        }\r\n    }\r\n}",
+    "files": "{\r\n    \".env\": {\r\n        \"parser\": \"properties\",\r\n        \"find\": {\r\n            \"BOT_TOKEN\": \"{{server.build.env.BOT_TOKEN}}\",\r\n            \"CLIENT_ID\": \"{{server.build.env.CLIENT_ID}}\",\r\n            \"GUILD_ID\": \"{{server.build.env.GUILD_ID}}\",\r\n            \"ADMIN_ROLE_ID\": \"{{server.build.env.ADMIN_ROLE_ID}}\",\r\n            \"LOG_CHANNEL_ID\": \"{{server.build.env.LOG_CHANNEL_ID}}\",\r\n            \"MONGODB_URI\": \"{{server.build.env.MONGODB_URI}}\",\r\n            \"HMAC_SECRET\": \"{{server.build.env.HMAC_SECRET}}\",\r\n            \"API_PORT\": \"{{server.build.env.API_PORT}}\",\r\n            \"NODE_ENV\": \"{{server.build.env.NODE_ENV}}\"\r\n        }\r\n    }\r\n}",
     "startup": "{\r\n    \"done\": \"Bot is online\"\r\n}",
     "logs": "{}",
     "stop": "^C"
@@ -90,6 +90,15 @@
       "user_viewable": true,
       "user_editable": true,
       "rules": "required|numeric|digits_between:1,5"
+    },
+    {
+      "name": "Discord Log Channel ID",
+      "description": "Discord Channel ID where license validation/login logs are sent (optional).",
+      "env_variable": "LOG_CHANNEL_ID",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string"
     },
     {
       "name": "Environment Mode",

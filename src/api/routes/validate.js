@@ -82,56 +82,57 @@ export default async function (fastify) {
       const { licenseKey, pluginId, serverIp, hwid } = request.body;
       const { ip } = request;
 
-    try {
-      log.info(
-        {
-          key: maskKey(licenseKey),
+      try {
+        log.info(
+          {
+            key: maskKey(licenseKey),
+            pluginId,
+            serverIp,
+            clientIp: ip,
+          },
+          'License validation request received',
+        );
+
+        // 2. Perform validation pipeline checks
+        const result = await validateLicense({
+          licenseKey,
           pluginId,
           serverIp,
-          clientIp: ip,
-        },
-        'License validation request received',
-      );
-
-      // 2. Perform validation pipeline checks
-      const result = await validateLicense({
-        licenseKey,
-        pluginId,
-        serverIp,
-        hwid,
-      });
-
-      if (result.valid) {
-        log.info({ key: maskKey(licenseKey) }, 'License validation handshake successful');
-        return reply.code(200).send({
-          status: 'valid',
-          token: result.token,
-          discord: {
-            ownerId: result.discord.ownerId,
-            ownerTag: result.discord.ownerTag,
-          },
+          hwid,
         });
+
+        if (result.valid) {
+          log.info({ key: maskKey(licenseKey) }, 'License validation handshake successful');
+          return reply.code(200).send({
+            status: 'valid',
+            token: result.token,
+            discord: {
+              ownerId: result.discord.ownerId,
+              ownerTag: result.discord.ownerTag,
+            },
+          });
+        }
+
+        log.warn(
+          {
+            key: maskKey(licenseKey),
+            reason: result.reason,
+          },
+          'License validation handshake rejected',
+        );
+
+        // Obfuscated error response to protect system signature mechanics
+        return reply.code(403).send({
+          status: 'invalid',
+          error: 'License validation failed',
+        });
+      } catch (error) {
+        log.error(
+          { err: error, key: maskKey(licenseKey) },
+          'Unexpected exception during validation handler',
+        );
+        return reply.code(500).send({ error: 'Internal server error' });
       }
-
-      log.warn(
-        {
-          key: maskKey(licenseKey),
-          reason: result.reason,
-        },
-        'License validation handshake rejected',
-      );
-
-      // Obfuscated error response to protect system signature mechanics
-      return reply.code(403).send({
-        status: 'invalid',
-        error: 'License validation failed',
-      });
-    } catch (error) {
-      log.error(
-        { err: error, key: maskKey(licenseKey) },
-        'Unexpected exception during validation handler',
-      );
-      return reply.code(500).send({ error: 'Internal server error' });
-    }
-  });
+    },
+  );
 }

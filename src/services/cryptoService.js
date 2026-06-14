@@ -87,5 +87,3 @@ export function hashHwid(rawHwid) {
   if (!rawHwid) return null;
   return crypto.createHash('sha256').update(rawHwid).digest('hex');
 }
-
-

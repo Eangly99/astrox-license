@@ -38,7 +38,11 @@
 /* Feature Cards Sleek Glassmorphism look */
 .VPFeature {
   border: 1px solid rgba(139, 92, 246, 0.12) !important;
-  background: linear-gradient(135deg, rgba(17, 12, 28, 0.6) 0%, rgba(10, 10, 18, 0.8) 100%) !important;
+  background: linear-gradient(
+    135deg,
+    rgba(17, 12, 28, 0.6) 0%,
+    rgba(10, 10, 18, 0.8) 100%
+  ) !important;
   backdrop-filter: blur(16px);
   border-radius: 12px !important;
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
@@ -71,7 +75,10 @@
 }
 
 /* Page content code headers */
-h1, h2, h3, h4 {
+h1,
+h2,
+h3,
+h4 {
   font-family: 'Outfit', sans-serif;
   letter-spacing: -0.02em;
 }

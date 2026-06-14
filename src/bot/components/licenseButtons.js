@@ -7,12 +7,22 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from 'discord.js';
-import { revokeLicense, getLicenseByKey, listLicenses } from '../../services/licenseService.js';
+import {
+  revokeLicense,
+  getLicenseByKey,
+  listLicenses,
+  reactivateLicense,
+} from '../../services/licenseService.js';
 import { createLogger } from '../../utils/logger.js';
-import { createSuccessEmbed, createErrorEmbed } from '../embeds/commonEmbeds.js';
+import {
+  createSuccessEmbed,
+  createErrorEmbed,
+  createWarningEmbed,
+} from '../embeds/commonEmbeds.js';
 import { createLicenseEmbed, createLicenseListEmbed } from '../embeds/licenseEmbeds.js';
 import AuditLog from '../../db/models/AuditLog.js';
 import { createAuditEmbed } from '../embeds/adminEmbeds.js';
+import { maskKey } from '../../utils/formatters.js';
 
 const log = createLogger('license-buttons');
 
@@ -251,6 +261,62 @@ export async function handleButton(interaction) {
       await interaction.update({ embeds: [embed], components: [row] });
     } catch (err) {
       log.error({ err }, 'Failed to paginate audit log');
+    }
+    return;
+  }
+
+  // 6. Review Reactivate
+  if (customId.startsWith('review_reactivate:')) {
+    const key = customId.substring('review_reactivate:'.length);
+    try {
+      await reactivateLicense(key, interaction.user.id, 'Staff review reactivation');
+      const embed = createSuccessEmbed(
+        'License Reactivated',
+        `Successfully reactivated license key \`${maskKey(key)}\`.`,
+      );
+      await interaction.update({ embeds: [embed], components: [] });
+    } catch (err) {
+      log.error({ err }, 'Failed to reactivate license from review button click');
+      const errorEmbed = createErrorEmbed('Operation Failed', err.message);
+      await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+    }
+    return;
+  }
+
+  // 7. Review Revoke
+  if (customId.startsWith('review_revoke:')) {
+    const key = customId.substring('review_revoke:'.length);
+    try {
+      pendingRevocations.set(interaction.user.id, {
+        key,
+        reason: 'Staff review revocation',
+        expiresAt: Date.now() + 5 * 60 * 1000,
+      });
+
+      const confirmEmbed = createWarningEmbed(
+        'Confirm Revocation',
+        `Are you sure you want to revoke license \`${maskKey(key)}\`?\nThis action is destructive and cannot be undone.`,
+      );
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('confirm_revoke')
+          .setLabel('Confirm Revoke')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId('cancel_revoke')
+          .setLabel('Cancel')
+          .setStyle(ButtonStyle.Secondary),
+      );
+
+      await interaction.update({
+        embeds: [confirmEmbed],
+        components: [row],
+      });
+    } catch (err) {
+      log.error({ err }, 'Failed to initialize review revocation');
+      const errorEmbed = createErrorEmbed('Error', 'Unable to initiate revocation.');
+      await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
     }
   }
 }

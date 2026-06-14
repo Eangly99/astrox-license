@@ -23,4 +23,13 @@ features:
   - icon: 📡
     title: Shared Protection
     details: Automatically flags and suspends licenses performing validation handshakes from >3 unique IPs in a 24-hour window.
+  - icon: 🤖
+    title: Discord Bot Control
+    details: Full administrator and self-service slash command dashboard for managing lifecycle actions and IP whitelisting.
+  - icon: ⚡
+    title: Live Cache Layer
+    details: Built-in Keyv cache (Redis/Memory) serving repetitive client validations in milliseconds, saving database cycles.
+  - icon: 📋
+    title: Audits & Blacklists
+    details: Comprehensive audit logging for all operations alongside IP, HWID, and Key blacklists for rapid attack mitigation.
 ---

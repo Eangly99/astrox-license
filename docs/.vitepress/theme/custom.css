@@ -1,0 +1,97 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Dynamic Violet & Blue Brand Colors */
+  --vp-c-brand-1: #8b5cf6;
+  --vp-c-brand-2: #a78bfa;
+  --vp-c-brand-3: #c084fc;
+  --vp-c-brand-next: #3b82f6;
+  --vp-c-brand-soft: rgba(139, 92, 246, 0.14);
+
+  /* Typography */
+  --vp-font-family-base: 'Inter', sans-serif;
+  --vp-font-family-mono: 'Fira Code', monospace;
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 50%, #3b82f6 100%);
+}
+
+/* Home Page Hero Section styling */
+.VPHero .name {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  font-size: 56px;
+  line-height: 1.1;
+  background: linear-gradient(135deg, #c084fc 0%, #8b5cf6 50%, #3b82f6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.VPHero .tagline {
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  font-size: 20px;
+  color: var(--vp-c-text-2) !important;
+  max-width: 600px;
+}
+
+/* Feature Cards Sleek Glassmorphism look */
+.VPFeature {
+  border: 1px solid rgba(139, 92, 246, 0.12) !important;
+  background: linear-gradient(135deg, rgba(17, 12, 28, 0.6) 0%, rgba(10, 10, 18, 0.8) 100%) !important;
+  backdrop-filter: blur(16px);
+  border-radius: 12px !important;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+}
+
+.VPFeature:hover {
+  border-color: rgba(139, 92, 246, 0.5) !important;
+  transform: translateY(-5px);
+  box-shadow: 0 12px 30px -10px rgba(139, 92, 246, 0.25);
+}
+
+.VPFeature .icon {
+  background-color: rgba(139, 92, 246, 0.1) !important;
+  border-radius: 8px !important;
+  padding: 6px;
+  display: inline-block;
+  margin-bottom: 12px;
+}
+
+/* Styled sidebar active item glows */
+.VPSidebarItem.active > .item {
+  color: var(--vp-c-brand-1) !important;
+  font-weight: 600;
+}
+
+.VPSidebarItem.active > .item::before {
+  background-color: var(--vp-c-brand-1) !important;
+  box-shadow: 0 0 10px var(--vp-c-brand-1);
+}
+
+/* Page content code headers */
+h1, h2, h3, h4 {
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: -0.02em;
+}
+
+h1 {
+  font-weight: 700;
+}
+
+/* Custom Inline alerts & tips styling */
+.custom-block.tip {
+  border-color: var(--vp-c-brand-1) !important;
+  background-color: rgba(139, 92, 246, 0.05) !important;
+}
+
+.custom-block.warning {
+  border-color: #f59e0b !important;
+  background-color: rgba(245, 158, 11, 0.05) !important;
+}
+
+.custom-block.danger {
+  border-color: #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.05) !important;
+}

@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import validateRoute from './routes/validate.js';
+import adminRoute from './routes/admin.js';
 import { config } from '../utils/config.js';
 import { createLogger } from '../utils/logger.js';
 import { RATE_LIMITS } from '../utils/constants.js';
@@ -17,7 +18,7 @@ export const fastify = Fastify({
 async function setupServer() {
   // 1. Rate Limiting per IP
   await fastify.register(rateLimit, {
-    max: RATE_LIMITS.API_MAX,
+    max: config.NODE_ENV === 'test' ? 10000 : RATE_LIMITS.API_MAX,
     timeWindow: RATE_LIMITS.API_WINDOW,
     errorResponseBuilder: (request, context) => ({
       statusCode: 429,
@@ -26,7 +27,17 @@ async function setupServer() {
     }),
   });
 
-  // 2. Health check route
+  // 2. Manual CORS Hook
+  fastify.addHook('onRequest', async (request, reply) => {
+    reply.header('Access-Control-Allow-Origin', '*');
+    reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (request.method === 'OPTIONS') {
+      return reply.code(204).send();
+    }
+  });
+
+  // 3. Health check route
   fastify.get('/api/v1/health', async () => {
     return {
       status: 'ok',
@@ -35,8 +46,11 @@ async function setupServer() {
     };
   });
 
-  // 3. Handshake validation route
+  // 4. Handshake validation route
   await fastify.register(validateRoute);
+
+  // 5. Admin routes
+  await fastify.register(adminRoute);
 }
 
 let initPromise = null;

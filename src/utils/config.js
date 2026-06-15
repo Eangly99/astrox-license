@@ -11,6 +11,10 @@ const envSchema = z.object({
   GUILD_ID: z.string().min(1, 'GUILD_ID is required'),
   ADMIN_ROLE_ID: z.string().min(1, 'ADMIN_ROLE_ID is required'),
   MONGODB_URI: z.string().min(1, 'MONGODB_URI is required'),
+  ADMIN_DISCORD_IDS: z
+    .string()
+    .min(1, 'ADMIN_DISCORD_IDS is required')
+    .transform((v) => v.split(',').map((id) => id.trim())),
   REDIS_URI: z.string().optional().default(''),
   LOG_CHANNEL_ID: z.string().optional().default(''),
   HMAC_SECRET: z.string().min(32, 'HMAC_SECRET must be at least 32 characters'),

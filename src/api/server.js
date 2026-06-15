@@ -20,6 +20,10 @@ async function setupServer() {
   await fastify.register(rateLimit, {
     max: config.NODE_ENV === 'test' ? 10000 : RATE_LIMITS.API_MAX,
     timeWindow: RATE_LIMITS.API_WINDOW,
+    skip: (request) => {
+      // Exempt admin dashboard routes from the global rate limit
+      return request.url.startsWith('/api/v1/admin');
+    },
     errorResponseBuilder: (request, context) => ({
       statusCode: 429,
       error: 'Too Many Requests',

@@ -215,11 +215,18 @@ export default async function (fastify) {
 
       const { maskKey } = await import('../../utils/formatters.js');
       const maskedKey = maskKey(key);
-      const auditLogs = await AuditLog.find({ targetKey: maskedKey }).sort({ timestamp: -1 }).lean();
+      const auditLogs = await AuditLog.find({ targetKey: { $in: [key, maskedKey] } }).sort({ timestamp: -1 }).lean();
+
+      const sanitizedLogs = auditLogs.map(log => {
+        if (log.targetKey && log.targetKey === key) {
+          log.targetKey = maskedKey;
+        }
+        return log;
+      });
 
       return reply.send({
         license: license.toJSON(),
-        auditLogs,
+        auditLogs: sanitizedLogs,
       });
     } catch (err) {
       request.log.error({ err }, 'Error in GET /admin/licenses/:key');

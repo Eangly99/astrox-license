@@ -39,6 +39,10 @@ async function authenticateAdmin(request, reply) {
     });
 
     if (!payload.userId || !config.ADMIN_DISCORD_IDS.includes(payload.userId)) {
+      request.log.warn(
+        { userId: payload.userId, allowedAdmins: config.ADMIN_DISCORD_IDS },
+        'Admin authentication failed: User ID not in allowed list',
+      );
       return reply.code(403).send({ error: 'Forbidden: Insufficient privileges' });
     }
 

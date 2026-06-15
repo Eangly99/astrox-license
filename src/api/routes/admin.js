@@ -180,7 +180,7 @@ export default async function (fastify) {
             ownerId: { type: 'string', minLength: 1 },
             ownerTag: { type: 'string', minLength: 1 },
             type: { type: 'string', enum: Object.values(LICENSE_TYPES) },
-            duration: { type: ['string', 'number'] },
+            duration: { anyOf: [{ type: 'string' }, { type: 'number' }] },
             maxIps: { type: 'integer', minimum: 1, maximum: 50 },
             sharedDetectionThreshold: { type: 'integer', minimum: 1, maximum: 100 },
           },

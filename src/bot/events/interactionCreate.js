@@ -81,7 +81,7 @@ export async function execute(interaction) {
       setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
 
       log.debug(
-        { commandName: interaction.commandName, user: interaction.user.tag },
+        { commandName: interaction.commandName, user: interaction.user.username },
         'Executing command',
       );
       await command.execute(interaction);

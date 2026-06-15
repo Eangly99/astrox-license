@@ -40,6 +40,9 @@ export async function handleButton(interaction) {
   if (customId === 'confirm_revoke') {
     const pending = pendingRevocations.get(interaction.user.id);
     if (!pending || Date.now() > pending.expiresAt) {
+      if (pending && pending.timeoutId) {
+        clearTimeout(pending.timeoutId);
+      }
       pendingRevocations.delete(interaction.user.id);
       const errorEmbed = createErrorEmbed(
         'Action Expired',
@@ -50,6 +53,9 @@ export async function handleButton(interaction) {
 
     try {
       await revokeLicense(pending.key, interaction.user.id, pending.reason);
+      if (pending.timeoutId) {
+        clearTimeout(pending.timeoutId);
+      }
       pendingRevocations.delete(interaction.user.id);
 
       const successEmbed = createSuccessEmbed(
@@ -70,6 +76,10 @@ export async function handleButton(interaction) {
 
   // 2. Cancel Revoke
   if (customId === 'cancel_revoke') {
+    const pending = pendingRevocations.get(interaction.user.id);
+    if (pending && pending.timeoutId) {
+      clearTimeout(pending.timeoutId);
+    }
     pendingRevocations.delete(interaction.user.id);
     const cancelEmbed = createSuccessEmbed(
       'Action Cancelled',
@@ -184,9 +194,9 @@ export async function handleButton(interaction) {
   // 4. Paginate License List (list|ownerId|pluginId|status|page)
   if (customId.startsWith('list|')) {
     const [_, rawOwnerId, rawPluginId, rawStatus, pageStr] = customId.split('|');
-    const ownerId = rawOwnerId || null;
-    const pluginId = rawPluginId || null;
-    const status = rawStatus || null;
+    const ownerId = (rawOwnerId === 'null' || !rawOwnerId) ? null : rawOwnerId;
+    const pluginId = (rawPluginId === 'null' || !rawPluginId) ? null : rawPluginId;
+    const status = (rawStatus === 'null' || !rawStatus) ? null : rawStatus;
     let page = parseInt(pageStr, 10) || 1;
 
     try {
@@ -227,8 +237,8 @@ export async function handleButton(interaction) {
   // 5. Paginate Audit Log (audit|actorId|action|page)
   if (customId.startsWith('audit|')) {
     const [_, rawActorId, rawAction, pageStr] = customId.split('|');
-    const actorId = rawActorId || null;
-    const action = rawAction || null;
+    const actorId = (rawActorId === 'null' || !rawActorId) ? null : rawActorId;
+    const action = (rawAction === 'null' || !rawAction) ? null : rawAction;
     let page = parseInt(pageStr, 10) || 1;
 
     try {
@@ -287,10 +297,24 @@ export async function handleButton(interaction) {
   if (customId.startsWith('review_revoke:')) {
     const key = customId.substring('review_revoke:'.length);
     try {
+      // Clear any existing timeout for this user first
+      const existingPending = pendingRevocations.get(interaction.user.id);
+      if (existingPending && existingPending.timeoutId) {
+        clearTimeout(existingPending.timeoutId);
+      }
+
+      const timeoutId = setTimeout(() => {
+        const entry = pendingRevocations.get(interaction.user.id);
+        if (entry && entry.timeoutId === timeoutId) {
+          pendingRevocations.delete(interaction.user.id);
+        }
+      }, 5 * 60 * 1000);
+
       pendingRevocations.set(interaction.user.id, {
         key,
         reason: 'Staff review revocation',
         expiresAt: Date.now() + 5 * 60 * 1000,
+        timeoutId,
       });
 
       const confirmEmbed = createWarningEmbed(

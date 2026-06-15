@@ -28,7 +28,7 @@ export function createStatsEmbed(stats) {
       { name: 'By Type', value: typesLines, inline: false },
       { name: 'By Plugin', value: pluginsLines, inline: false },
     )
-    .setFooter({ text: '• AstroX License' })
+    .setFooter({ text: 'Stats are cached for up to 60 seconds • AstroX License' })
     .setTimestamp();
 }
 

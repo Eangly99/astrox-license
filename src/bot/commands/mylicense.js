@@ -8,7 +8,6 @@ import {
 } from 'discord.js';
 import License from '../../db/models/License.js';
 import { LICENSE_STATUS } from '../../utils/constants.js';
-import { syncExpiredLicenses } from '../../services/licenseService.js';
 import { createLicenseEmbed } from '../embeds/licenseEmbeds.js';
 import { createErrorEmbed, createInfoEmbed } from '../embeds/commonEmbeds.js';
 
@@ -18,10 +17,7 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
   try {
-    // 1. Bulk update expired licenses for this user
-    await syncExpiredLicenses(interaction.user.id);
-
-    // 2. Fetch active and suspended licenses
+    // Fetch active and suspended licenses
     const activeLicenses = await License.find({
       ownerId: interaction.user.id,
       status: { $in: [LICENSE_STATUS.ACTIVE, LICENSE_STATUS.SUSPENDED] },

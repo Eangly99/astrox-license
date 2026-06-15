@@ -233,7 +233,7 @@ export async function execute(interaction) {
         {
           pluginId,
           ownerId: user.id,
-          ownerTag: user.tag,
+          ownerTag: user.username,
           type,
           duration,
           maxIps,
@@ -309,10 +309,24 @@ export async function execute(interaction) {
         return await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
       }
 
+      // Clear any existing timeout for this user first
+      const existingPending = pendingRevocations.get(interaction.user.id);
+      if (existingPending && existingPending.timeoutId) {
+        clearTimeout(existingPending.timeoutId);
+      }
+
+      const timeoutId = setTimeout(() => {
+        const entry = pendingRevocations.get(interaction.user.id);
+        if (entry && entry.timeoutId === timeoutId) {
+          pendingRevocations.delete(interaction.user.id);
+        }
+      }, 5 * 60 * 1000);
+
       pendingRevocations.set(interaction.user.id, {
         key,
         reason,
         expiresAt: Date.now() + 5 * 60 * 1000,
+        timeoutId,
       });
 
       const confirmEmbed = createWarningEmbed(
@@ -355,7 +369,7 @@ export async function execute(interaction) {
     }
 
     try {
-      const license = await transferLicense(key, newOwner.id, newOwner.tag, interaction.user.id);
+      const license = await transferLicense(key, newOwner.id, newOwner.username, interaction.user.id);
       const embed = createSuccessEmbed(
         'License Transferred',
         `License key ${bold(maskKey(license.key))} has been successfully transferred to ${userMention(

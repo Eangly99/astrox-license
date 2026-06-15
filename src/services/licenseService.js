@@ -55,7 +55,7 @@ export async function createLicense(
     if (!duration) {
       throw new Error('Duration is required for non-lifetime licenses');
     }
-    const ms = parseInt(duration, 10);
+    const ms = Number(duration);
     if (isNaN(ms) || ms <= 0) {
       throw new Error('Invalid duration provided');
     }

@@ -34,6 +34,7 @@ async function authenticateAdmin(request, reply) {
       issuer: 'astrox-license',
       audience: 'astrox-license-admin',
       algorithms: ['HS256'],
+      clockTolerance: '24h', // Allow up to 24 hours of clock drift between frontend and backend
     });
 
     if (!payload.userId || !config.ADMIN_DISCORD_IDS.includes(payload.userId)) {

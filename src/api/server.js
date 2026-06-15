@@ -37,7 +37,17 @@ async function setupServer() {
     if (config.NODE_ENV === 'production') {
       if (config.DASHBOARD_URL && config.DASHBOARD_URL !== '*') {
         const allowedOrigins = config.DASHBOARD_URL.split(',').map((o) => o.trim());
-        if (origin && allowedOrigins.includes(origin)) {
+        const originMatched = origin && (
+          allowedOrigins.includes(origin) ||
+          allowedOrigins.some(pattern => {
+            if (pattern.includes('*')) {
+              const regexPattern = new RegExp('^' + pattern.replace(/\./g, '\\.').replace(/\*/g, '[^/]+') + '$');
+              return regexPattern.test(origin);
+            }
+            return false;
+          })
+        );
+        if (originMatched) {
           reply.header('Access-Control-Allow-Origin', origin);
         } else {
           reply.header('Access-Control-Allow-Origin', allowedOrigins[0]);

@@ -1,3 +1,4 @@
+// NOTE: Keep in sync with dashboard constants in astrox-license-dash/src/lib/constants.ts
 /** License types */
 export const LICENSE_TYPES = Object.freeze({
   TRIAL: 'trial',

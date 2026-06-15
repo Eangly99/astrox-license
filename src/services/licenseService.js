@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import License from '../db/models/License.js';
 import Plugin from '../db/models/Plugin.js';
 import Blacklist from '../db/models/Blacklist.js';
@@ -26,6 +27,10 @@ export async function createLicense(
   actorId,
 ) {
   log.info({ pluginId, ownerId, type, maxIps, actorId }, 'Creating license...');
+
+  if (!mongoose.Types.ObjectId.isValid(pluginId)) {
+    throw new Error('Invalid plugin ID format');
+  }
 
   const plugin = await Plugin.findById(pluginId);
   if (!plugin) {
@@ -331,6 +336,7 @@ async function validateLicenseInternal({ licenseKey, pluginId, serverIp }, hashe
     validationIps.push({ ip: serverIp, timestamp: new Date() });
   }
   license.metadata.set('validationIps', validationIps);
+  license.markModified('metadata');
 
   const uniqueIps24h = new Set(validationIps.map((item) => item.ip)).size;
   if (uniqueIps24h > SHARED_DETECTION_THRESHOLD) {
@@ -544,7 +550,12 @@ export async function listLicenses({ ownerId, pluginId, status, page = 1, limit 
   // 2. Build pagination query
   const query = {};
   if (ownerId) query.ownerId = ownerId;
-  if (pluginId) query.pluginId = pluginId;
+  if (pluginId) {
+    if (!mongoose.Types.ObjectId.isValid(pluginId)) {
+      throw new Error('Invalid plugin ID format');
+    }
+    query.pluginId = pluginId;
+  }
   if (status) query.status = status;
 
   const total = await License.countDocuments(query);

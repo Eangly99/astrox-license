@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { jwtVerify } from 'jose';
 import { config } from '../../utils/config.js';
 import { LICENSE_STATUS, LICENSE_TYPES, AUDIT_ACTIONS, BLACKLIST_TYPES } from '../../utils/constants.js';
@@ -96,7 +97,12 @@ export default async function (fastify) {
 
       const query = {};
       if (status) query.status = status;
-      if (pluginId) query.pluginId = pluginId;
+      if (pluginId) {
+        if (!mongoose.Types.ObjectId.isValid(pluginId)) {
+          return reply.code(400).send({ error: 'Invalid pluginId format' });
+        }
+        query.pluginId = pluginId;
+      }
       if (ownerTag) query.ownerTag = { $regex: ownerTag, $options: 'i' };
 
       const limitNum = parseInt(limit, 10) || 10;

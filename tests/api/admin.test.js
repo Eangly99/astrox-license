@@ -157,6 +157,16 @@ describe('Admin API Route Tests', () => {
       expect(data.total).toBe(1);
     });
 
+    it('should return 400 when listing licenses with invalid pluginId format', async () => {
+      const res = await fastify.inject({
+        method: 'GET',
+        url: '/api/v1/admin/licenses?pluginId=invalid-format',
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body).error).toContain('Invalid pluginId format');
+    });
+
     it('should create a new license', async () => {
       const res = await fastify.inject({
         method: 'POST',
@@ -175,6 +185,23 @@ describe('Admin API Route Tests', () => {
       expect(data.key).toBeDefined();
       expect(data.ownerId).toBe('98765');
       expect(data.maxIps).toBe(3);
+    });
+
+    it('should return 400 when creating a license with invalid pluginId format', async () => {
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/v1/admin/licenses',
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: {
+          pluginId: 'invalid-format',
+          ownerId: '98765',
+          ownerTag: 'NewOwner#9999',
+          type: 'lifetime',
+          maxIps: 3,
+        },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body).error).toContain('Invalid plugin ID format');
     });
 
     it('should fetch single license details and masked logs', async () => {

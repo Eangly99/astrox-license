@@ -24,6 +24,7 @@ const envSchema = z.object({
     .default('3000')
     .transform((v) => parseInt(v, 10)),
   NODE_ENV: z.enum(['development', 'production', 'test']).optional().default('production'),
+  DASHBOARD_URL: z.string().optional().default('*'),
 });
 
 const parsed = envSchema.safeParse(process.env);

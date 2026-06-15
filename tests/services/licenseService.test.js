@@ -51,7 +51,7 @@ describe('License Service Integration Tests', () => {
     const lic = await createLicense(
       {
         pluginId: mockPlugin._id.toString(),
-        ownerId: '987654321',
+        ownerId: '987654321_1',
         ownerTag: 'Owner#0000',
         type: 'trial',
         duration: '86400000', // 1d
@@ -70,7 +70,7 @@ describe('License Service Integration Tests', () => {
     const lic = await createLicense(
       {
         pluginId: mockPlugin._id.toString(),
-        ownerId: '987654321',
+        ownerId: '987654321_2',
         ownerTag: 'Owner#0000',
         type: 'lifetime',
         maxIps: 2,
@@ -88,7 +88,7 @@ describe('License Service Integration Tests', () => {
     expect(check.valid).toBe(true);
     expect(check.token).toBeTypeOf('string');
     expect(check.discord).toBeDefined();
-    expect(check.discord.ownerId).toBe('987654321');
+    expect(check.discord.ownerId).toBe('987654321_2');
     expect(check.discord.ownerTag).toBe('Owner#0000');
 
     // Confirm HWID lock is bound
@@ -100,7 +100,7 @@ describe('License Service Integration Tests', () => {
     const lic = await createLicense(
       {
         pluginId: mockPlugin._id.toString(),
-        ownerId: '987654321',
+        ownerId: '987654321_3',
         ownerTag: 'Owner#0000',
         type: 'lifetime',
         maxIps: 2,
@@ -132,7 +132,7 @@ describe('License Service Integration Tests', () => {
     const lic = await createLicense(
       {
         pluginId: mockPlugin._id.toString(),
-        ownerId: '987654321',
+        ownerId: '987654321_4',
         ownerTag: 'Owner#0000',
         type: 'lifetime',
         maxIps: 1, // Only 1 IP allowed
@@ -166,7 +166,7 @@ describe('License Service Integration Tests', () => {
     const lic = await createLicense(
       {
         pluginId: mockPlugin._id.toString(),
-        ownerId: '987654321',
+        ownerId: '987654321_5',
         ownerTag: 'Owner#0000',
         type: 'lifetime',
         maxIps: 5,
@@ -279,7 +279,7 @@ describe('License Service Integration Tests', () => {
     // Should fail with invalid IP format
     await expect(
       updateLicenseIps(lic.key, 'my_user_id', ['not-an-ip'], 'my_user_id'),
-    ).rejects.toThrow('Invalid IPv4 address format');
+    ).rejects.toThrow('Invalid IP address format');
 
     // Should fail if not the owner
     await expect(
@@ -387,6 +387,9 @@ describe('License Service Integration Tests', () => {
       'admin_user_id',
     );
 
+    // Set to expired to bypass active uniqueness check for subsequent creations
+    await License.updateOne({ _id: lic1._id }, { $set: { status: 'expired' } });
+
     const lic2 = await createLicense(
       {
         pluginId: mockPlugin._id.toString(),
@@ -398,6 +401,9 @@ describe('License Service Integration Tests', () => {
       },
       'admin_user_id',
     );
+
+    // Set to expired to bypass active uniqueness check for subsequent creations
+    await License.updateOne({ _id: lic2._id }, { $set: { status: 'expired' } });
 
     const lic3 = await createLicense(
       {

@@ -1,11 +1,13 @@
 import mongoose from 'mongoose';
 import { jwtVerify } from 'jose';
+import rateLimit from '@fastify/rate-limit';
 import { config } from '../../utils/config.js';
 import { LICENSE_STATUS, LICENSE_TYPES, AUDIT_ACTIONS, BLACKLIST_TYPES } from '../../utils/constants.js';
 import License from '../../db/models/License.js';
 import Plugin from '../../db/models/Plugin.js';
 import Blacklist from '../../db/models/Blacklist.js';
 import AuditLog from '../../db/models/AuditLog.js';
+import StatsSnapshot from '../../db/models/StatsSnapshot.js';
 import { cacheService } from '../../services/cacheService.js';
 import {
   createLicense,
@@ -35,7 +37,7 @@ async function authenticateAdmin(request, reply) {
       issuer: 'astrox-license',
       audience: 'astrox-license-admin',
       algorithms: ['HS256'],
-      clockTolerance: '24h', // Allow up to 24 hours of clock drift between frontend and backend
+      clockTolerance: '60s', // Allow up to 60 seconds of clock drift between frontend and backend
     });
 
     if (!payload.userId || !config.ADMIN_DISCORD_IDS.includes(payload.userId)) {
@@ -57,6 +59,16 @@ async function authenticateAdmin(request, reply) {
  * @param {import('fastify').FastifyInstance} fastify
  */
 export default async function (fastify) {
+  // Register rate limit for admin routes: 100 requests per minute
+  await fastify.register(rateLimit, {
+    max: config.NODE_ENV === 'test' ? 10000 : 100,
+    timeWindow: '1 minute',
+    errorResponseBuilder: (request, context) => ({
+      statusCode: 429,
+      error: 'Too Many Requests',
+      message: `Admin rate limit exceeded. Try again in ${context.after}.`,
+    }),
+  });
   // 1. GET /api/v1/admin/stats
   fastify.get('/api/v1/admin/stats', { preHandler: authenticateAdmin }, async (request, reply) => {
     try {
@@ -65,11 +77,25 @@ export default async function (fastify) {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-      const total7d = await License.countDocuments({ createdAt: { $lt: sevenDaysAgo } });
-      const active7d = await License.countDocuments({ status: LICENSE_STATUS.ACTIVE, createdAt: { $lt: sevenDaysAgo } });
-      const suspended7d = await License.countDocuments({ status: LICENSE_STATUS.SUSPENDED, createdAt: { $lt: sevenDaysAgo } });
-      const revoked7d = await License.countDocuments({ status: LICENSE_STATUS.REVOKED, createdAt: { $lt: sevenDaysAgo } });
-      const expired7d = await License.countDocuments({ status: LICENSE_STATUS.EXPIRED, createdAt: { $lt: sevenDaysAgo } });
+      const snapshot7d = await StatsSnapshot.findOne({
+        timestamp: { $lte: sevenDaysAgo },
+      }).sort({ timestamp: -1 });
+
+      let total7d, active7d, suspended7d, revoked7d, expired7d;
+
+      if (snapshot7d) {
+        total7d = snapshot7d.total;
+        active7d = snapshot7d.active;
+        suspended7d = snapshot7d.suspended;
+        revoked7d = snapshot7d.revoked;
+        expired7d = snapshot7d.expired;
+      } else {
+        total7d = await License.countDocuments({ createdAt: { $lt: sevenDaysAgo } });
+        active7d = await License.countDocuments({ status: LICENSE_STATUS.ACTIVE, createdAt: { $lt: sevenDaysAgo } });
+        suspended7d = await License.countDocuments({ status: LICENSE_STATUS.SUSPENDED, createdAt: { $lt: sevenDaysAgo } });
+        revoked7d = await License.countDocuments({ status: LICENSE_STATUS.REVOKED, createdAt: { $lt: sevenDaysAgo } });
+        expired7d = await License.countDocuments({ status: LICENSE_STATUS.EXPIRED, createdAt: { $lt: sevenDaysAgo } });
+      }
 
       const calculateDelta = (current, previous) => {
         if (previous === 0) return current > 0 ? 100 : 0;
@@ -90,7 +116,8 @@ export default async function (fastify) {
         },
       });
     } catch (err) {
-      return reply.code(500).send({ error: err.message });
+      request.log.error({ err }, 'Error in GET /admin/stats');
+      return reply.code(500).send({ error: 'Internal server error' });
     }
   });
 
@@ -107,7 +134,10 @@ export default async function (fastify) {
         }
         query.pluginId = pluginId;
       }
-      if (ownerTag) query.ownerTag = { $regex: ownerTag, $options: 'i' };
+      if (ownerTag) {
+        const escaped = ownerTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        query.ownerTag = { $regex: escaped, $options: 'i' };
+      }
 
       const limitNum = parseInt(limit, 10) || 10;
       const pageNum = parseInt(page, 10) || 1;
@@ -131,26 +161,48 @@ export default async function (fastify) {
         totalPages,
       });
     } catch (err) {
-      return reply.code(500).send({ error: err.message });
+      request.log.error({ err }, 'Error in GET /admin/licenses');
+      return reply.code(500).send({ error: 'Internal server error' });
     }
   });
 
   // 3. POST /api/v1/admin/licenses
-  fastify.post('/api/v1/admin/licenses', { preHandler: authenticateAdmin }, async (request, reply) => {
-    try {
-      const { pluginId, ownerId, ownerTag, type, duration, maxIps } = request.body;
-      const actorId = request.adminUser.userId;
+  fastify.post(
+    '/api/v1/admin/licenses',
+    {
+      preHandler: authenticateAdmin,
+      schema: {
+        body: {
+          type: 'object',
+          required: ['pluginId', 'ownerId', 'ownerTag', 'type'],
+          properties: {
+            pluginId: { type: 'string', minLength: 1 },
+            ownerId: { type: 'string', minLength: 1 },
+            ownerTag: { type: 'string', minLength: 1 },
+            type: { type: 'string', enum: Object.values(LICENSE_TYPES) },
+            duration: { type: ['string', 'number'] },
+            maxIps: { type: 'integer', minimum: 1, maximum: 50 },
+            sharedDetectionThreshold: { type: 'integer', minimum: 1, maximum: 100 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { pluginId, ownerId, ownerTag, type, duration, maxIps, sharedDetectionThreshold } = request.body;
+        const actorId = request.adminUser.userId;
 
-      const license = await createLicense(
-        { pluginId, ownerId, ownerTag, type, duration, maxIps },
-        actorId,
-      );
+        const license = await createLicense(
+          { pluginId, ownerId, ownerTag, type, duration, maxIps, sharedDetectionThreshold },
+          actorId,
+        );
 
-      return reply.code(201).send(license.toJSON());
-    } catch (err) {
-      return reply.code(400).send({ error: err.message });
-    }
-  });
+        return reply.code(201).send(license.toJSON());
+      } catch (err) {
+        return reply.code(400).send({ error: err.message });
+      }
+    },
+  );
 
   // 4. GET /api/v1/admin/licenses/:key
   fastify.get('/api/v1/admin/licenses/:key', { preHandler: authenticateAdmin }, async (request, reply) => {
@@ -170,69 +222,124 @@ export default async function (fastify) {
         auditLogs,
       });
     } catch (err) {
-      return reply.code(500).send({ error: err.message });
+      request.log.error({ err }, 'Error in GET /admin/licenses/:key');
+      return reply.code(500).send({ error: 'Internal server error' });
     }
   });
 
   // 5. POST /api/v1/admin/licenses/:key/suspend
-  fastify.post('/api/v1/admin/licenses/:key/suspend', { preHandler: authenticateAdmin }, async (request, reply) => {
-    try {
-      const { key } = request.params;
-      const { reason } = request.body || {};
-      const actorId = request.adminUser.userId;
+  fastify.post(
+    '/api/v1/admin/licenses/:key/suspend',
+    {
+      preHandler: authenticateAdmin,
+      schema: {
+        body: {
+          type: 'object',
+          properties: {
+            reason: { type: 'string', maxLength: 500 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { key } = request.params;
+        const { reason } = request.body || {};
+        const actorId = request.adminUser.userId;
 
-      const license = await suspendLicense(key, actorId, reason);
-      return reply.send(license.toJSON());
-    } catch (err) {
-      return reply.code(400).send({ error: err.message });
-    }
-  });
+        const license = await suspendLicense(key, actorId, reason);
+        return reply.send(license.toJSON());
+      } catch (err) {
+        return reply.code(400).send({ error: err.message });
+      }
+    },
+  );
 
   // 6. POST /api/v1/admin/licenses/:key/revoke
-  fastify.post('/api/v1/admin/licenses/:key/revoke', { preHandler: authenticateAdmin }, async (request, reply) => {
-    try {
-      const { key } = request.params;
-      const { reason } = request.body || {};
-      const actorId = request.adminUser.userId;
+  fastify.post(
+    '/api/v1/admin/licenses/:key/revoke',
+    {
+      preHandler: authenticateAdmin,
+      schema: {
+        body: {
+          type: 'object',
+          properties: {
+            reason: { type: 'string', maxLength: 500 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { key } = request.params;
+        const { reason } = request.body || {};
+        const actorId = request.adminUser.userId;
 
-      const license = await revokeLicense(key, actorId, reason);
-      return reply.send(license.toJSON());
-    } catch (err) {
-      return reply.code(400).send({ error: err.message });
-    }
-  });
+        const license = await revokeLicense(key, actorId, reason);
+        return reply.send(license.toJSON());
+      } catch (err) {
+        return reply.code(400).send({ error: err.message });
+      }
+    },
+  );
 
   // 7. POST /api/v1/admin/licenses/:key/reactivate
-  fastify.post('/api/v1/admin/licenses/:key/reactivate', { preHandler: authenticateAdmin }, async (request, reply) => {
-    try {
-      const { key } = request.params;
-      const { reason } = request.body || {};
-      const actorId = request.adminUser.userId;
+  fastify.post(
+    '/api/v1/admin/licenses/:key/reactivate',
+    {
+      preHandler: authenticateAdmin,
+      schema: {
+        body: {
+          type: 'object',
+          properties: {
+            reason: { type: 'string', maxLength: 500 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { key } = request.params;
+        const { reason } = request.body || {};
+        const actorId = request.adminUser.userId;
 
-      const license = await reactivateLicense(key, actorId, reason);
-      return reply.send(license.toJSON());
-    } catch (err) {
-      return reply.code(400).send({ error: err.message });
-    }
-  });
+        const license = await reactivateLicense(key, actorId, reason);
+        return reply.send(license.toJSON());
+      } catch (err) {
+        return reply.code(400).send({ error: err.message });
+      }
+    },
+  );
 
   // 8. POST /api/v1/admin/licenses/:key/transfer
-  fastify.post('/api/v1/admin/licenses/:key/transfer', { preHandler: authenticateAdmin }, async (request, reply) => {
-    try {
-      const { key } = request.params;
-      const { ownerId, ownerTag } = request.body;
-      const actorId = request.adminUser.userId;
+  fastify.post(
+    '/api/v1/admin/licenses/:key/transfer',
+    {
+      preHandler: authenticateAdmin,
+      schema: {
+        body: {
+          type: 'object',
+          required: ['ownerId', 'ownerTag'],
+          properties: {
+            ownerId: { type: 'string', minLength: 1 },
+            ownerTag: { type: 'string', minLength: 1 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { key } = request.params;
+        const { ownerId, ownerTag } = request.body;
+        const actorId = request.adminUser.userId;
 
-      if (!ownerId || !ownerTag) {
-        return reply.code(400).send({ error: 'ownerId and ownerTag are required' });
+        const license = await transferLicense(key, ownerId, ownerTag, actorId);
+        return reply.send(license.toJSON());
+      } catch (err) {
+        return reply.code(400).send({ error: err.message });
       }
-
-      const license = await transferLicense(key, ownerId, ownerTag, actorId);
-      return reply.send(license.toJSON());
-    } catch (err) {
-      return reply.code(400).send({ error: err.message });
-    }
-  });
+    },
+  );
 
   // 9. POST /api/v1/admin/licenses/:key/hwid-reset
   fastify.post('/api/v1/admin/licenses/:key/hwid-reset', { preHandler: authenticateAdmin }, async (request, reply) => {
@@ -268,27 +375,41 @@ export default async function (fastify) {
   });
 
   // 10. PUT /api/v1/admin/licenses/:key/ips
-  fastify.put('/api/v1/admin/licenses/:key/ips', { preHandler: authenticateAdmin }, async (request, reply) => {
-    try {
-      const { key } = request.params;
-      const { ips } = request.body;
-      const actorId = request.adminUser.userId;
+  fastify.put(
+    '/api/v1/admin/licenses/:key/ips',
+    {
+      preHandler: authenticateAdmin,
+      schema: {
+        body: {
+          type: 'object',
+          required: ['ips'],
+          properties: {
+            ips: {
+              type: 'array',
+              items: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { key } = request.params;
+        const { ips } = request.body;
+        const actorId = request.adminUser.userId;
 
-      if (!Array.isArray(ips)) {
-        return reply.code(400).send({ error: 'ips must be an array' });
+        const license = await License.findOne({ key });
+        if (!license) {
+          return reply.code(404).send({ error: 'License not found' });
+        }
+
+        const updatedLicense = await updateLicenseIps(key, license.ownerId, ips, actorId);
+        return reply.send(updatedLicense.toJSON());
+      } catch (err) {
+        return reply.code(400).send({ error: err.message });
       }
-
-      const license = await License.findOne({ key });
-      if (!license) {
-        return reply.code(404).send({ error: 'License not found' });
-      }
-
-      const updatedLicense = await updateLicenseIps(key, license.ownerId, ips, actorId);
-      return reply.send(updatedLicense.toJSON());
-    } catch (err) {
-      return reply.code(400).send({ error: err.message });
-    }
-  });
+    },
+  );
 
   // 11. GET /api/v1/admin/plugins
   fastify.get('/api/v1/admin/plugins', { preHandler: authenticateAdmin }, async (request, reply) => {
@@ -306,40 +427,55 @@ export default async function (fastify) {
       );
       return reply.send(enriched);
     } catch (err) {
-      return reply.code(500).send({ error: err.message });
+      request.log.error({ err }, 'Error in GET /admin/plugins');
+      return reply.code(500).send({ error: 'Internal server error' });
     }
   });
 
   // 12. POST /api/v1/admin/plugins
-  fastify.post('/api/v1/admin/plugins', { preHandler: authenticateAdmin }, async (request, reply) => {
-    try {
-      const { name, slug, version, description } = request.body;
-      const actorId = request.adminUser.userId;
+  fastify.post(
+    '/api/v1/admin/plugins',
+    {
+      preHandler: authenticateAdmin,
+      schema: {
+        body: {
+          type: 'object',
+          required: ['name', 'slug'],
+          properties: {
+            name: { type: 'string', minLength: 1, maxLength: 64 },
+            slug: { type: 'string', minLength: 1, maxLength: 32, pattern: '^[a-z0-9-]+$' },
+            version: { type: 'string', maxLength: 32 },
+            description: { type: 'string', maxLength: 256 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { name, slug, version, description } = request.body;
+        const actorId = request.adminUser.userId;
 
-      if (!name || !slug) {
-        return reply.code(400).send({ error: 'name and slug are required' });
+        const existing = await Plugin.findOne({ slug });
+        if (existing) {
+          return reply.code(400).send({ error: 'Plugin with this slug already exists' });
+        }
+
+        const plugin = await Plugin.create({
+          name,
+          slug,
+          version: version || '1.0.0',
+          description: description || '',
+          createdBy: actorId,
+        });
+
+        await cacheService.delete('stats:dashboard');
+
+        return reply.code(201).send(plugin.toJSON());
+      } catch (err) {
+        return reply.code(400).send({ error: err.message });
       }
-
-      const existing = await Plugin.findOne({ slug });
-      if (existing) {
-        return reply.code(400).send({ error: 'Plugin with this slug already exists' });
-      }
-
-      const plugin = await Plugin.create({
-        name,
-        slug,
-        version: version || '1.0.0',
-        description: description || '',
-        createdBy: actorId,
-      });
-
-      await cacheService.delete('stats:dashboard');
-
-      return reply.code(201).send(plugin.toJSON());
-    } catch (err) {
-      return reply.code(400).send({ error: err.message });
-    }
-  });
+    },
+  );
 
   // 13. GET /api/v1/admin/blacklist
   fastify.get('/api/v1/admin/blacklist', { preHandler: authenticateAdmin }, async (request, reply) => {
@@ -349,30 +485,44 @@ export default async function (fastify) {
       if (type) query.type = type;
 
       const list = await Blacklist.find(query).sort({ createdAt: -1 }).lean();
-      return reply.send(list.map(e => ({ ...e, id: e._id.toString() })));
+      return reply.send(list.map((e) => ({ ...e, id: e._id.toString() })));
     } catch (err) {
-      return reply.code(500).send({ error: err.message });
+      request.log.error({ err }, 'Error in GET /admin/blacklist');
+      return reply.code(500).send({ error: 'Internal server error' });
     }
   });
 
   // 14. POST /api/v1/admin/blacklist
-  fastify.post('/api/v1/admin/blacklist', { preHandler: authenticateAdmin }, async (request, reply) => {
-    try {
-      const { type, value, reason } = request.body;
-      const actorId = request.adminUser.userId;
+  fastify.post(
+    '/api/v1/admin/blacklist',
+    {
+      preHandler: authenticateAdmin,
+      schema: {
+        body: {
+          type: 'object',
+          required: ['type', 'value', 'reason'],
+          properties: {
+            type: { type: 'string', enum: ['key', 'hwid', 'ip'] },
+            value: { type: 'string', minLength: 1 },
+            reason: { type: 'string', minLength: 1, maxLength: 500 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { type, value, reason } = request.body;
+        const actorId = request.adminUser.userId;
 
-      if (!type || !value || !reason) {
-        return reply.code(400).send({ error: 'type, value, and reason are required' });
+        const entry = await addBlacklist({ type, value, reason }, actorId);
+        await AuditLog.log(AUDIT_ACTIONS.BLACKLIST_ADD, actorId, null, { type, value, reason });
+
+        return reply.code(201).send(entry.toJSON());
+      } catch (err) {
+        return reply.code(400).send({ error: err.message });
       }
-
-      const entry = await addBlacklist({ type, value, reason }, actorId);
-      await AuditLog.log(AUDIT_ACTIONS.BLACKLIST_ADD, actorId, null, { type, value, reason });
-
-      return reply.code(201).send(entry.toJSON());
-    } catch (err) {
-      return reply.code(400).send({ error: err.message });
-    }
-  });
+    },
+  );
 
   // 15. DELETE /api/v1/admin/blacklist
   fastify.delete('/api/v1/admin/blacklist', { preHandler: authenticateAdmin }, async (request, reply) => {
@@ -425,14 +575,15 @@ export default async function (fastify) {
         .lean();
 
       return reply.send({
-        logs: logs.map(e => ({ ...e, id: e._id.toString() })),
+        logs: logs.map((e) => ({ ...e, id: e._id.toString() })),
         total,
         page: currentPage,
         limit: limitNum,
         totalPages,
       });
     } catch (err) {
-      return reply.code(500).send({ error: err.message });
+      request.log.error({ err }, 'Error in GET /admin/audit');
+      return reply.code(500).send({ error: 'Internal server error' });
     }
   });
 }

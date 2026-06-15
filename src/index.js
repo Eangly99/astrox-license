@@ -4,6 +4,7 @@ import { connectDatabase, disconnectDatabase } from './db/connection.js';
 import { loadCommands, loadEvents } from './bot/handler.js';
 import { client } from './bot/client.js';
 import { startApi, stopApi } from './api/server.js';
+import { startScheduler, stopScheduler } from './utils/scheduler.js';
 
 logger.info(
   {
@@ -31,6 +32,9 @@ async function bootstrap() {
     // 4. Authenticate Discord Client
     logger.info('Authenticating with Discord Gateway...');
     await client.login(config.BOT_TOKEN);
+
+    // 5. Start background scheduler
+    startScheduler();
   } catch (error) {
     logger.fatal({ err: error }, 'Bootstrap sequence failed. System aborting.');
     process.exit(1);
@@ -50,6 +54,9 @@ async function shutdown(signal) {
       logger.info('Destroying Discord client session...');
       client.destroy();
     }
+
+    // Stop background scheduler
+    stopScheduler();
 
     // Stop API to stop accepting incoming handshake requests
     await stopApi();

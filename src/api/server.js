@@ -33,7 +33,21 @@ async function setupServer() {
 
   // 2. Manual CORS Hook
   fastify.addHook('onRequest', async (request, reply) => {
-    reply.header('Access-Control-Allow-Origin', '*');
+    const origin = request.headers.origin;
+    if (config.NODE_ENV === 'production') {
+      if (config.DASHBOARD_URL && config.DASHBOARD_URL !== '*') {
+        const allowedOrigins = config.DASHBOARD_URL.split(',').map((o) => o.trim());
+        if (origin && allowedOrigins.includes(origin)) {
+          reply.header('Access-Control-Allow-Origin', origin);
+        } else {
+          reply.header('Access-Control-Allow-Origin', allowedOrigins[0]);
+        }
+      } else {
+        reply.header('Access-Control-Allow-Origin', origin || '*');
+      }
+    } else {
+      reply.header('Access-Control-Allow-Origin', origin || '*');
+    }
     reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     if (request.method === 'OPTIONS') {

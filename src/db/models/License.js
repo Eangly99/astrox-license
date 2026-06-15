@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { LICENSE_TYPES, LICENSE_STATUS } from '../../utils/constants.js';
+import { LICENSE_TYPES, LICENSE_STATUS, SHARED_DETECTION_THRESHOLD } from '../../utils/constants.js';
 
 const { Schema, model } = mongoose;
 
@@ -41,6 +41,10 @@ const licenseSchema = new Schema(
     maxIps: {
       type: Number,
       default: 1,
+    },
+    sharedDetectionThreshold: {
+      type: Number,
+      default: SHARED_DETECTION_THRESHOLD,
     },
     allowedIps: {
       type: [String],

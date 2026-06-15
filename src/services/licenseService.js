@@ -23,7 +23,7 @@ const log = createLogger('license-service');
  * Create a new license key for a user and plugin.
  */
 export async function createLicense(
-  { pluginId, ownerId, ownerTag, type, duration, maxIps = 1 },
+  { pluginId, ownerId, ownerTag, type, duration, maxIps = 1, sharedDetectionThreshold = 3 },
   actorId,
 ) {
   log.info({ pluginId, ownerId, type, maxIps, actorId }, 'Creating license...');
@@ -35,6 +35,17 @@ export async function createLicense(
   const plugin = await Plugin.findById(pluginId);
   if (!plugin) {
     throw new Error('Plugin not found');
+  }
+
+  // Idempotency check: check if user already has an active or suspended license for this plugin
+  const existingLicense = await License.findOne({
+    ownerId,
+    pluginId,
+    status: { $in: [LICENSE_STATUS.ACTIVE, LICENSE_STATUS.SUSPENDED] },
+  });
+
+  if (existingLicense) {
+    throw new Error('User already has an active or suspended license for this plugin.');
   }
 
   const key = generateLicenseKey();
@@ -58,6 +69,7 @@ export async function createLicense(
     ownerTag,
     type,
     maxIps,
+    sharedDetectionThreshold,
     expiresAt,
   });
 
@@ -91,10 +103,10 @@ export async function syncExpiredLicenses(ownerId = null) {
   if (expiredLicenses.length > 0) {
     const expiredKeys = expiredLicenses.map((l) => l.key);
 
-    // Bulk update status in DB
+    // Bulk update status and clear activeCacheKeys in DB
     await License.updateMany(
       { key: { $in: expiredKeys } },
-      { $set: { status: LICENSE_STATUS.EXPIRED } },
+      { $set: { status: LICENSE_STATUS.EXPIRED, activeCacheKeys: [] } },
     );
 
     await cacheService.delete('stats:dashboard');
@@ -178,13 +190,7 @@ async function validateLicenseInternal({ licenseKey, pluginId, serverIp }, hashe
   const blacklistCacheKey = 'blacklist:all';
   let blacklistSet = await cacheService.get(blacklistCacheKey);
   if (!blacklistSet) {
-    const list = await Blacklist.find().lean();
-    blacklistSet = {
-      keys: list.filter((e) => e.type === BLACKLIST_TYPES.KEY).map((e) => e.value),
-      hwids: list.filter((e) => e.type === BLACKLIST_TYPES.HWID).map((e) => e.value),
-      ips: list.filter((e) => e.type === BLACKLIST_TYPES.IP).map((e) => e.value),
-    };
-    await cacheService.set(blacklistCacheKey, blacklistSet, 300000); // 5 minute TTL
+    blacklistSet = await refreshBlacklistCache();
   }
 
   const isBlacklisted =
@@ -295,6 +301,16 @@ async function validateLicenseInternal({ licenseKey, pluginId, serverIp }, hashe
       }
     } else if (license.hwid === hashedHwid) {
       // IP limit exceeded, but HWID matches (same machine, dynamic IP change). Auto-rotate oldest IP.
+      const lastIpRotationAt = license.metadata?.get('lastIpRotationAt');
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      if (lastIpRotationAt && new Date(lastIpRotationAt) > oneHourAgo) {
+        log.warn(
+          { key: maskKey(licenseKey), lastIpRotationAt },
+          'IP auto-rotation rate limited (max once per hour)'
+        );
+        return { valid: false, reason: 'IP auto-rotation limit exceeded. Please try again later.' };
+      }
+
       const oldIps = [...license.allowedIps];
       const newIps = [...oldIps];
       newIps.shift(); // Remove oldest
@@ -302,7 +318,7 @@ async function validateLicenseInternal({ licenseKey, pluginId, serverIp }, hashe
 
       updatedLicense = await License.findOneAndUpdate(
         { _id: license._id, hwid: hashedHwid },
-        { $set: { allowedIps: newIps } },
+        { $set: { allowedIps: newIps, 'metadata.lastIpRotationAt': new Date() } },
         { new: true },
       );
       if (updatedLicense) {
@@ -339,7 +355,8 @@ async function validateLicenseInternal({ licenseKey, pluginId, serverIp }, hashe
   license.markModified('metadata');
 
   const uniqueIps24h = new Set(validationIps.map((item) => item.ip)).size;
-  if (uniqueIps24h > SHARED_DETECTION_THRESHOLD) {
+  const threshold = license.sharedDetectionThreshold ?? SHARED_DETECTION_THRESHOLD;
+  if (uniqueIps24h > threshold) {
     license.status = LICENSE_STATUS.SUSPENDED;
     // Evict validation cache entries
     if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
@@ -516,6 +533,10 @@ export async function reactivateLicense(key, actorId, reason = 'No reason provid
     throw new Error('License is already active');
   }
 
+  if (license.status === LICENSE_STATUS.REVOKED) {
+    throw new Error('Revoked licenses cannot be reactivated. Issue a new license instead.');
+  }
+
   license.status = LICENSE_STATUS.ACTIVE;
 
   // Reset validation IPs rolling window tracker on reactivation
@@ -544,9 +565,6 @@ export async function reactivateLicense(key, actorId, reason = 'No reason provid
  * List licenses with filters and pagination.
  */
 export async function listLicenses({ ownerId, pluginId, status, page = 1, limit = 10 }) {
-  // 1. Bulk update expired licenses to avoid N+1 writes
-  await syncExpiredLicenses();
-
   // 2. Build pagination query
   const query = {};
   if (ownerId) query.ownerId = ownerId;
@@ -671,16 +689,18 @@ export async function updateLicenseIps(key, ownerId, ips, actorId) {
     );
   }
 
-  const ipRegex = /^((25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(25[0-5]|2[0-4]\d|[01]?\d\d?)$/;
+  const ipRegex = /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(25[0-5]|2[0-4]\d|[01]?\d\d?)$|^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^(?:[0-9a-fA-F]{1,4}:){1,7}:$|^(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}$|^(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}$|^(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}$|^(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}$|^(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}$|^[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6}$|^:(?::[0-9a-fA-F]{1,4}){1,7}$|^::$|^::ffff:(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/;
   for (const ip of ips) {
     if (!ipRegex.test(ip)) {
-      throw new Error(`Invalid IPv4 address format: ${ip}`);
+      throw new Error(`Invalid IP address format: ${ip}`);
     }
   }
 
   const oldIps = [...license.allowedIps];
 
-  const ipsChanged = oldIps.length !== ips.length || !oldIps.every((ip, idx) => ip === ips[idx]);
+  const oldSet = new Set(oldIps);
+  const newSet = new Set(ips);
+  const ipsChanged = oldSet.size !== newSet.size || [...oldSet].some(ip => !newSet.has(ip));
   if (ipsChanged) {
     license.hwid = null;
     license.activatedAt = null;
@@ -714,6 +734,20 @@ export async function updateLicenseIps(key, ownerId, ips, actorId) {
 }
 
 /**
+ * Rebuild and cache the blacklist set from the database.
+ */
+export async function refreshBlacklistCache() {
+  const list = await Blacklist.find().lean();
+  const blacklistSet = {
+    keys: list.filter((e) => e.type === BLACKLIST_TYPES.KEY).map((e) => e.value),
+    hwids: list.filter((e) => e.type === BLACKLIST_TYPES.HWID).map((e) => e.value),
+    ips: list.filter((e) => e.type === BLACKLIST_TYPES.IP).map((e) => e.value),
+  };
+  await cacheService.set('blacklist:all', blacklistSet, 60000); // 60s TTL
+  return blacklistSet;
+}
+
+/**
  * Add an entity to the global blacklist and clear cache.
  */
 export async function addBlacklist({ type, value, reason }, actorId) {
@@ -731,8 +765,8 @@ export async function addBlacklist({ type, value, reason }, actorId) {
       await license.save();
     }
   }
-  // Clear blacklist cache set
-  await cacheService.delete('blacklist:all');
+  // Proactively refresh blacklist cache set
+  await refreshBlacklistCache();
 
   return entry;
 }
@@ -744,7 +778,7 @@ export async function removeBlacklist({ type, value }, actorId) {
   log.info({ type, value, actorId }, 'Removing from blacklist...');
   const entry = await Blacklist.findOneAndDelete({ type, value });
   if (entry) {
-    await cacheService.delete('blacklist:all');
+    await refreshBlacklistCache();
   }
   return entry;
 }

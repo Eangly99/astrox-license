@@ -24,6 +24,7 @@ export default async function (fastify) {
               pattern: '^(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)$|^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^(?:[0-9a-fA-F]{1,4}:){1,7}:$|^(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}$|^(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}$|^(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}$|^(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}$|^(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}$|^[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6}$|^:(?::[0-9a-fA-F]{1,4}){1,7}$|^::$|^::ffff:(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)$',
             },
             hwid: { type: 'string', minLength: 8, maxLength: 128 },
+            port: { type: 'integer', minimum: 1, maximum: 65535 },
           },
         },
         response: {
@@ -79,7 +80,7 @@ export default async function (fastify) {
       },
     },
     async (request, reply) => {
-      const { licenseKey, pluginId, serverIp, hwid } = request.body;
+      const { licenseKey, pluginId, serverIp, hwid, port } = request.body;
       const { ip } = request;
 
       try {
@@ -88,6 +89,7 @@ export default async function (fastify) {
             key: maskKey(licenseKey),
             pluginId,
             serverIp,
+            port,
             clientIp: ip,
           },
           'License validation request received',
@@ -99,6 +101,7 @@ export default async function (fastify) {
           pluginId,
           serverIp,
           hwid,
+          port,
         });
 
         if (result.valid) {

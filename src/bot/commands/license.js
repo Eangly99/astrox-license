@@ -18,6 +18,7 @@ import {
   listLicenses,
   transferLicense,
   updateLicenseMaxIps,
+  updateLicenseMaxServersPerIp,
 } from '../../services/licenseService.js';
 import {
   createLicenseCreatedEmbed,
@@ -80,6 +81,14 @@ export const data = new SlashCommandBuilder()
           .setRequired(false)
           .setMinValue(-1)
           .setMaxValue(10000),
+      )
+      .addIntegerOption((opt) =>
+        opt
+          .setName('max-servers')
+          .setDescription('Max servers per IP (-1 for unlimited, default: 1)')
+          .setRequired(false)
+          .setMinValue(-1)
+          .setMaxValue(1000),
       ),
   )
   // 2. Verify Subcommand
@@ -152,7 +161,7 @@ export const data = new SlashCommandBuilder()
   .addSubcommand((sub) =>
     sub
       .setName('update')
-      .setDescription('Update license settings (e.g. allowed IP count limit)')
+      .setDescription('Update license settings (e.g. IP limit or concurrent servers limit)')
       .addStringOption((opt) =>
         opt.setName('key').setDescription('The license key to update').setRequired(true),
       )
@@ -160,9 +169,17 @@ export const data = new SlashCommandBuilder()
         opt
           .setName('max-ips')
           .setDescription('Allowed concurrent IPs limit (-1 for unlimited)')
-          .setRequired(true)
+          .setRequired(false)
           .setMinValue(-1)
           .setMaxValue(10000),
+      )
+      .addIntegerOption((opt) =>
+        opt
+          .setName('max-servers')
+          .setDescription('Allowed concurrent servers per IP (-1 for unlimited)')
+          .setRequired(false)
+          .setMinValue(-1)
+          .setMaxValue(1000),
       ),
   );
 
@@ -207,6 +224,7 @@ export async function execute(interaction) {
     const type = interaction.options.getString('type');
     const rawDuration = interaction.options.getString('duration');
     const maxIps = interaction.options.getInteger('max-ips') || 1;
+    const maxServersPerIp = interaction.options.getInteger('max-servers') || 1;
 
     const validation = generateLicenseSchema.safeParse({
       pluginId,
@@ -214,6 +232,7 @@ export async function execute(interaction) {
       type,
       duration: rawDuration || undefined,
       maxIps,
+      maxServersPerIp,
     });
 
     if (!validation.success) {
@@ -256,6 +275,7 @@ export async function execute(interaction) {
           type,
           duration,
           maxIps,
+          maxServersPerIp,
         },
         interaction.user.id,
       );
@@ -551,6 +571,16 @@ export async function execute(interaction) {
   if (subcommand === 'update') {
     const key = interaction.options.getString('key').trim();
     const maxIps = interaction.options.getInteger('max-ips');
+    const maxServers = interaction.options.getInteger('max-servers');
+
+    if (maxIps === null && maxServers === null) {
+      const errEmbed = createErrorEmbed(
+        'Missing Parameter',
+        'You must specify at least one setting to update (max-ips or max-servers).',
+      );
+      return await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
+    }
+
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
@@ -560,12 +590,23 @@ export async function execute(interaction) {
         return await interaction.editReply({ embeds: [errEmbed] });
       }
 
-      await updateLicenseMaxIps(key, maxIps, interaction.user.id);
+      const updatesPerformed = [];
 
-      const limitDisplay = maxIps === -1 ? 'Unlimited' : maxIps.toString();
+      if (maxIps !== null) {
+        await updateLicenseMaxIps(key, maxIps, interaction.user.id);
+        const limitDisplay = maxIps === -1 ? 'Unlimited' : maxIps.toString();
+        updatesPerformed.push(`IP whitelisting limit set to: ${bold(limitDisplay)}`);
+      }
+
+      if (maxServers !== null) {
+        await updateLicenseMaxServersPerIp(key, maxServers, interaction.user.id);
+        const limitDisplay = maxServers === -1 ? 'Unlimited' : maxServers.toString();
+        updatesPerformed.push(`Concurrent servers per IP set to: ${bold(limitDisplay)}`);
+      }
+
       const embed = createSuccessEmbed(
         'License Updated',
-        `License key ${bold(maskKey(key))} has been successfully updated.\n\nNew IP whitelisting limit: ${bold(limitDisplay)}`,
+        `License key ${bold(maskKey(key))} has been successfully updated.\n\n${updatesPerformed.join('\n')}`,
       );
       await interaction.editReply({ embeds: [embed] });
     } catch (err) {

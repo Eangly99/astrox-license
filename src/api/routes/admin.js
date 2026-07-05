@@ -17,6 +17,7 @@ import {
   transferLicense,
   updateLicenseIps,
   updateLicenseMaxIps,
+  updateLicenseMaxServersPerIp,
   addBlacklist,
   removeBlacklist,
   getStats,
@@ -183,6 +184,7 @@ export default async function (fastify) {
             type: { type: 'string', enum: Object.values(LICENSE_TYPES) },
             duration: { anyOf: [{ type: 'string' }, { type: 'number' }] },
             maxIps: { type: 'integer', minimum: -1, maximum: 10000 },
+            maxServersPerIp: { type: 'integer', minimum: -1, maximum: 1000 },
             sharedDetectionThreshold: { type: 'integer', minimum: 1, maximum: 100 },
           },
         },
@@ -190,11 +192,11 @@ export default async function (fastify) {
     },
     async (request, reply) => {
       try {
-        const { pluginId, ownerId, ownerTag, type, duration, maxIps, sharedDetectionThreshold } = request.body;
+        const { pluginId, ownerId, ownerTag, type, duration, maxIps, maxServersPerIp, sharedDetectionThreshold } = request.body;
         const actorId = request.adminUser.userId;
 
         const license = await createLicense(
-          { pluginId, ownerId, ownerTag, type, duration, maxIps, sharedDetectionThreshold },
+          { pluginId, ownerId, ownerTag, type, duration, maxIps, maxServersPerIp, sharedDetectionThreshold },
           actorId,
         );
 
@@ -441,6 +443,35 @@ export default async function (fastify) {
         const actorId = request.adminUser.userId;
 
         const updatedLicense = await updateLicenseMaxIps(key, maxIps, actorId);
+        return reply.send(updatedLicense.toJSON());
+      } catch (err) {
+        return reply.code(400).send({ error: err.message });
+      }
+    },
+  );
+
+  // 10.6 PUT /api/v1/admin/licenses/:key/max-servers
+  fastify.put(
+    '/api/v1/admin/licenses/:key/max-servers',
+    {
+      preHandler: authenticateAdmin,
+      schema: {
+        body: {
+          type: 'object',
+          required: ['maxServers'],
+          properties: {
+            maxServers: { type: 'integer', minimum: -1, maximum: 1000 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { key } = request.params;
+        const { maxServers } = request.body;
+        const actorId = request.adminUser.userId;
+
+        const updatedLicense = await updateLicenseMaxServersPerIp(key, maxServers, actorId);
         return reply.send(updatedLicense.toJSON());
       } catch (err) {
         return reply.code(400).send({ error: err.message });

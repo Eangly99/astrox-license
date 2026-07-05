@@ -10,6 +10,7 @@ import {
   transferLicense,
   updateLicenseIps,
   updateLicenseMaxIps,
+  updateLicenseMaxServersPerIp,
   revokeLicense,
   listLicenses,
   addBlacklist,
@@ -646,5 +647,97 @@ describe('License Service Integration Tests', () => {
     // Try to update to invalid values (should throw)
     await expect(updateLicenseMaxIps(lic.key, 0, 'admin_user_id')).rejects.toThrow();
     await expect(updateLicenseMaxIps(lic.key, -2, 'admin_user_id')).rejects.toThrow();
+  });
+
+  it('should enforce maxServersPerIp limits and allow updates', async () => {
+    const lic = await createLicense(
+      {
+        pluginId: mockPlugin._id.toString(),
+        ownerId: 'server_limit_user',
+        ownerTag: 'ServerLimitOwner#0000',
+        type: 'lifetime',
+        maxIps: 1,
+        maxServersPerIp: 1, // Default limit of 1
+      },
+      'admin_user_id',
+    );
+
+    // Validate first port (25565) -> succeeds
+    let res = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '1.1.1.1',
+      hwid: 'same_hwid',
+      port: 25565,
+    });
+    expect(res.valid).toBe(true);
+
+    // Validate second port (25566) on same IP -> fails (limit = 1)
+    res = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '1.1.1.1',
+      hwid: 'same_hwid',
+      port: 25566,
+    });
+    expect(res.valid).toBe(false);
+    expect(res.reason).toBe('Concurrent server instances limit exceeded');
+
+    // Update limit to 2
+    await updateLicenseMaxServersPerIp(lic.key, 2, 'admin_user_id');
+
+    // Re-validate first port to put it back in cache (since updateLicenseMaxServersPerIp clears it)
+    res = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '1.1.1.1',
+      hwid: 'same_hwid',
+      port: 25565,
+    });
+    expect(res.valid).toBe(true);
+
+    // Validate second port again -> now succeeds
+    res = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '1.1.1.1',
+      hwid: 'same_hwid',
+      port: 25566,
+    });
+    expect(res.valid).toBe(true);
+
+    // Validate third port (25567) -> fails (limit = 2)
+    res = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '1.1.1.1',
+      hwid: 'same_hwid',
+      port: 25567,
+    });
+    expect(res.valid).toBe(false);
+    expect(res.reason).toBe('Concurrent server instances limit exceeded');
+
+    // Update limit to -1 (unlimited)
+    await updateLicenseMaxServersPerIp(lic.key, -1, 'admin_user_id');
+
+    // Validate third port again -> now succeeds
+    res = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '1.1.1.1',
+      hwid: 'same_hwid',
+      port: 25567,
+    });
+    expect(res.valid).toBe(true);
+
+    // Validate fourth port (25568) -> also succeeds
+    res = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '1.1.1.1',
+      hwid: 'same_hwid',
+      port: 25568,
+    });
+    expect(res.valid).toBe(true);
   });
 });

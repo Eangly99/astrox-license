@@ -159,7 +159,8 @@ export async function expireIndividualLicense(license) {
  */
 export async function validateLicense(params) {
   const hashedHwid = hashHwid(params.hwid);
-  const cacheKey = `validate:${params.licenseKey}:${params.pluginId}:${params.serverIp}:${hashedHwid}`;
+  const port = params.port || 25565;
+  const cacheKey = `validate:${params.licenseKey}:${params.pluginId}:${params.serverIp}:${hashedHwid}:${port}`;
 
   // 1. Check cache first
   const cached = await cacheService.get(cacheKey);
@@ -179,7 +180,7 @@ export async function validateLicense(params) {
   return result;
 }
 
-async function validateLicenseInternal({ licenseKey, pluginId, serverIp }, hashedHwid, cacheKey) {
+async function validateLicenseInternal({ licenseKey, pluginId, serverIp, port }, hashedHwid, cacheKey) {
   // 2. Verify HMAC signature
   if (!verifyLicenseKey(licenseKey)) {
     log.warn({ key: maskKey(licenseKey) }, 'License key failed cryptographic signature check');
@@ -388,6 +389,41 @@ async function validateLicenseInternal({ licenseKey, pluginId, serverIp }, hashe
     log.warn({ key: maskKey(licenseKey), uniqueIps24h }, 'License suspended due to shared usage');
     return { valid: false, reason: 'Suspended: Shared license usage detected' };
   }
+
+  // 9.5 Enforce concurrent server instances per IP limit
+  const activePort = Number(port || 25565);
+  const cacheKeyInstances = `active_instances:${licenseKey}:${serverIp}`;
+  
+  let activeInstancesMap = await cacheService.get(cacheKeyInstances) || {};
+  const currentTime = Date.now();
+  const heartbeatExpiry = 150 * 1000; // 2.5 minutes expiration window
+  
+  // Clean up stale instances
+  const cleanedInstances = {};
+  for (const [p, lastSeen] of Object.entries(activeInstancesMap)) {
+    if (currentTime - Number(lastSeen) < heartbeatExpiry) {
+      cleanedInstances[p] = lastSeen;
+    }
+  }
+  
+  // Check if this port is already active
+  const isAlreadyActive = cleanedInstances[activePort] !== undefined;
+  const activeCount = Object.keys(cleanedInstances).length;
+  const maxAllowedServers = license.maxServersPerIp ?? 1;
+  
+  if (!isAlreadyActive) {
+    if (maxAllowedServers !== -1 && activeCount >= maxAllowedServers) {
+      log.warn(
+        { key: maskKey(licenseKey), ip: serverIp, activeCount, max: maxAllowedServers },
+        'Concurrent server instances per IP limit exceeded',
+      );
+      return { valid: false, reason: 'Concurrent server instances limit exceeded' };
+    }
+  }
+  
+  // Register/update this instance
+  cleanedInstances[activePort] = currentTime;
+  await cacheService.set(cacheKeyInstances, cleanedInstances, 180 * 1000); // 3 minutes TTL
 
   // 10. Update validation timestamp and active cache keys
   license.lastValidatedAt = new Date();
@@ -834,5 +870,54 @@ export async function updateLicenseMaxIps(key, maxIps, actorId) {
   await cacheService.delete(`validate:${key}`);
 
   log.info({ key: maskKey(key), oldMaxIps, newMaxIps: newLimit }, 'License IP limit updated successfully');
+  return license;
+}
+
+/**
+ * Update maximum concurrent server instances limit per whitelisted IP.
+ */
+export async function updateLicenseMaxServersPerIp(key, maxServers, actorId) {
+  log.info({ key: maskKey(key), maxServers, actorId }, 'Updating license concurrent server limit...');
+
+  const license = await License.findOne({ key });
+  if (!license) {
+    throw new Error('License not found');
+  }
+
+  const newLimit = Number(maxServers);
+  if (isNaN(newLimit) || newLimit < -1 || newLimit === 0) {
+    throw new Error('Invalid concurrent servers limit provided');
+  }
+
+  const oldLimit = license.maxServersPerIp ?? 1;
+  license.maxServersPerIp = newLimit;
+
+  // Clear active validation caches
+  if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
+    for (const keyToDel of license.activeCacheKeys) {
+      await cacheService.delete(keyToDel);
+    }
+    license.activeCacheKeys = [];
+  }
+
+  // Clear active instances tracker cache for all allowed IPs
+  if (license.allowedIps && license.allowedIps.length > 0) {
+    for (const ip of license.allowedIps) {
+      await cacheService.delete(`active_instances:${key}:${ip}`);
+    }
+  }
+
+  await license.save();
+  await cacheService.delete('stats:dashboard');
+
+  // Audit log
+  await AuditLog.log(AUDIT_ACTIONS.UPDATE_MAX_SERVERS_PER_IP, actorId, key, {
+    oldLimit,
+    newLimit,
+  });
+
+  await cacheService.delete(`validate:${key}`);
+
+  log.info({ key: maskKey(key), oldLimit, newLimit }, 'License concurrent server limit updated successfully');
   return license;
 }

@@ -288,6 +288,18 @@ describe('Admin API Route Tests', () => {
       const data = JSON.parse(res.body);
       expect(data.maxIps).toBe(10);
     });
+
+    it('should update max server instances limit', async () => {
+      const res = await fastify.inject({
+        method: 'PUT',
+        url: `/api/v1/admin/licenses/${testLicense.key}/max-servers`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: { maxServers: 5 },
+      });
+      expect(res.statusCode).toBe(200);
+      const data = JSON.parse(res.body);
+      expect(data.maxServersPerIp).toBe(5);
+    });
   });
 
   describe('Plugin Registry Endpoints', () => {

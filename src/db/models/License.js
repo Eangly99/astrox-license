@@ -42,6 +42,10 @@ const licenseSchema = new Schema(
       type: Number,
       default: 1,
     },
+    maxServersPerIp: {
+      type: Number,
+      default: 1,
+    },
     sharedDetectionThreshold: {
       type: Number,
       default: SHARED_DETECTION_THRESHOLD,

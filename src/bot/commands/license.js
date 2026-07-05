@@ -245,6 +245,8 @@ export async function execute(interaction) {
       duration = parsedMs.toString();
     }
 
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     try {
       const license = await createLicense(
         {
@@ -263,10 +265,10 @@ export async function execute(interaction) {
       licenseObj.pluginId = populated;
 
       const embed = createLicenseCreatedEmbed(licenseObj, license.key);
-      await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ embeds: [embed] });
     } catch (err) {
       const errEmbed = createErrorEmbed('License Creation Failed', err.message);
-      await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ embeds: [errEmbed] });
     }
     return;
   }
@@ -274,6 +276,7 @@ export async function execute(interaction) {
   // B. Verify License
   if (subcommand === 'verify') {
     const key = interaction.options.getString('key').trim();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const license = await getLicenseByKey(key);
@@ -282,7 +285,7 @@ export async function execute(interaction) {
           'Not Found',
           'The requested license key does not exist in our registry.',
         );
-        return await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
+        return await interaction.editReply({ embeds: [errEmbed] });
       }
 
       const embed = createLicenseEmbed(license);
@@ -294,14 +297,13 @@ export async function execute(interaction) {
           .setStyle(ButtonStyle.Primary),
       );
 
-      await interaction.reply({
+      await interaction.editReply({
         embeds: [embed],
         components: [row],
-        flags: MessageFlags.Ephemeral,
       });
     } catch {
       const errEmbed = createErrorEmbed('Failed', 'An error occurred during query execution.');
-      await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ embeds: [errEmbed] });
     }
     return;
   }
@@ -310,12 +312,13 @@ export async function execute(interaction) {
   if (subcommand === 'revoke') {
     const key = interaction.options.getString('key').trim();
     const reason = interaction.options.getString('reason') || 'No reason provided';
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const license = await getLicenseByKey(key);
       if (!license) {
         const errEmbed = createErrorEmbed('Not Found', 'The requested license key does not exist.');
-        return await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
+        return await interaction.editReply({ embeds: [errEmbed] });
       }
 
       if (license.status === 'revoked') {
@@ -323,7 +326,7 @@ export async function execute(interaction) {
           'Already Revoked',
           'This license has already been revoked.',
         );
-        return await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
+        return await interaction.editReply({ embeds: [errEmbed] });
       }
 
       // Clear any existing timeout for this user first
@@ -362,14 +365,13 @@ export async function execute(interaction) {
           .setStyle(ButtonStyle.Secondary),
       );
 
-      await interaction.reply({
+      await interaction.editReply({
         embeds: [confirmEmbed],
         components: [row],
-        flags: MessageFlags.Ephemeral,
       });
     } catch {
       const errEmbed = createErrorEmbed('Failed', 'Failed to initialize revocation process.');
-      await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ embeds: [errEmbed] });
     }
     return;
   }
@@ -385,6 +387,8 @@ export async function execute(interaction) {
       return await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
     }
 
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     try {
       const license = await transferLicense(key, newOwner.id, newOwner.username, interaction.user.id);
       const embed = createSuccessEmbed(
@@ -393,10 +397,10 @@ export async function execute(interaction) {
           newOwner.id,
         )}.\n\nAll existing IP whitelists and Hardware bindings have been reset.`,
       );
-      await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ embeds: [embed] });
     } catch (err) {
       const errEmbed = createErrorEmbed('Transfer Failed', err.message);
-      await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ embeds: [errEmbed] });
     }
     return;
   }
@@ -408,6 +412,8 @@ export async function execute(interaction) {
     const status = interaction.options.getString('status');
 
     const ownerId = user ? user.id : null;
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const { licenses, page, totalPages } = await listLicenses({
@@ -433,14 +439,13 @@ export async function execute(interaction) {
           .setDisabled(page >= totalPages),
       );
 
-      await interaction.reply({
+      await interaction.editReply({
         embeds: [embed],
         components: [row],
-        flags: MessageFlags.Ephemeral,
       });
     } catch {
       const errEmbed = createErrorEmbed('Query Failed', 'Unable to retrieve license list.');
-      await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ embeds: [errEmbed] });
     }
     return;
   }
@@ -498,6 +503,7 @@ export async function execute(interaction) {
 
   // G. Review Suspended Licenses
   if (subcommand === 'review') {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
       const { licenses } = await listLicenses({ status: 'suspended', page: 1, limit: 10 });
       if (licenses.length === 0) {
@@ -505,7 +511,7 @@ export async function execute(interaction) {
           'Review Dashboard',
           'There are no suspended licenses requiring review at this time.',
         );
-        return await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+        return await interaction.editReply({ embeds: [embed] });
       }
 
       const embed = createWarningEmbed(
@@ -530,14 +536,13 @@ export async function execute(interaction) {
 
       const row = new ActionRowBuilder().addComponents(selectMenu);
 
-      await interaction.reply({
+      await interaction.editReply({
         embeds: [embed],
         components: [row],
-        flags: MessageFlags.Ephemeral,
       });
     } catch (err) {
       const errEmbed = createErrorEmbed('Query Failed', 'Unable to retrieve suspended licenses.');
-      await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ embeds: [errEmbed] });
     }
     return;
   }
@@ -546,12 +551,13 @@ export async function execute(interaction) {
   if (subcommand === 'update') {
     const key = interaction.options.getString('key').trim();
     const maxIps = interaction.options.getInteger('max-ips');
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const license = await getLicenseByKey(key);
       if (!license) {
         const errEmbed = createErrorEmbed('Not Found', 'The requested license key does not exist.');
-        return await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
+        return await interaction.editReply({ embeds: [errEmbed] });
       }
 
       await updateLicenseMaxIps(key, maxIps, interaction.user.id);
@@ -561,10 +567,10 @@ export async function execute(interaction) {
         'License Updated',
         `License key ${bold(maskKey(key))} has been successfully updated.\n\nNew IP whitelisting limit: ${bold(limitDisplay)}`,
       );
-      await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ embeds: [embed] });
     } catch (err) {
       const errEmbed = createErrorEmbed('Update Failed', err.message);
-      await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ embeds: [errEmbed] });
     }
     return;
   }

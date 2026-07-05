@@ -12,6 +12,7 @@ export async function connectDatabase() {
   try {
     await mongoose.connect(uri, {
       autoIndex: config.NODE_ENV !== 'production',
+      serverSelectionTimeoutMS: 5000,
     });
     log.info('MongoDB connected successfully');
   } catch (error) {

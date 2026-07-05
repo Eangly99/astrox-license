@@ -20,6 +20,28 @@ try {
   keyvInstance = new Keyv();
 }
 
+const TIMEOUT_MS = 3000;
+
+function withTimeout(promise, defaultValue) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      log.error('Cache operation timed out');
+      resolve(defaultValue);
+    }, TIMEOUT_MS);
+
+    promise
+      .then((val) => {
+        clearTimeout(timer);
+        resolve(val);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        log.error({ err }, 'Cache operation failed');
+        resolve(defaultValue);
+      });
+  });
+}
+
 export const cacheService = {
   /**
    * Retrieve a value from the cache.
@@ -27,12 +49,7 @@ export const cacheService = {
    * @returns {Promise<any>}
    */
   async get(key) {
-    try {
-      return await keyvInstance.get(key);
-    } catch (err) {
-      log.error({ err, key }, 'Cache get operation failed');
-      return undefined;
-    }
+    return withTimeout(keyvInstance.get(key), undefined);
   },
 
   /**
@@ -43,13 +60,7 @@ export const cacheService = {
    * @returns {Promise<boolean>}
    */
   async set(key, value, ttlMs) {
-    try {
-      await keyvInstance.set(key, value, ttlMs);
-      return true;
-    } catch (err) {
-      log.error({ err, key }, 'Cache set operation failed');
-      return false;
-    }
+    return withTimeout(keyvInstance.set(key, value, ttlMs), false);
   },
 
   /**
@@ -58,12 +69,7 @@ export const cacheService = {
    * @returns {Promise<boolean>}
    */
   async delete(key) {
-    try {
-      return await keyvInstance.delete(key);
-    } catch (err) {
-      log.error({ err, key }, 'Cache delete operation failed');
-      return false;
-    }
+    return withTimeout(keyvInstance.delete(key), false);
   },
 
   /**
@@ -71,12 +77,6 @@ export const cacheService = {
    * @returns {Promise<boolean>}
    */
   async clear() {
-    try {
-      await keyvInstance.clear();
-      return true;
-    } catch (err) {
-      log.error({ err }, 'Cache clear operation failed');
-      return false;
-    }
+    return withTimeout(keyvInstance.clear(), false);
   },
 };

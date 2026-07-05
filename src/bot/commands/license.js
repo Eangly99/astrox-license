@@ -17,6 +17,7 @@ import {
   getLicenseByKey,
   listLicenses,
   transferLicense,
+  updateLicenseMaxIps,
 } from '../../services/licenseService.js';
 import {
   createLicenseCreatedEmbed,
@@ -75,10 +76,10 @@ export const data = new SlashCommandBuilder()
       .addIntegerOption((opt) =>
         opt
           .setName('max-ips')
-          .setDescription('Maximum concurrent whitelisted IPs allowed (default: 1)')
+          .setDescription('Max whitelisted IPs (-1 for unlimited, default: 1)')
           .setRequired(false)
-          .setMinValue(1)
-          .setMaxValue(50),
+          .setMinValue(-1)
+          .setMaxValue(10000),
       ),
   )
   // 2. Verify Subcommand
@@ -147,6 +148,22 @@ export const data = new SlashCommandBuilder()
   )
   .addSubcommand((sub) =>
     sub.setName('review').setDescription('Review and manage suspended licenses'),
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName('update')
+      .setDescription('Update license settings (e.g. allowed IP count limit)')
+      .addStringOption((opt) =>
+        opt.setName('key').setDescription('The license key to update').setRequired(true),
+      )
+      .addIntegerOption((opt) =>
+        opt
+          .setName('max-ips')
+          .setDescription('Allowed concurrent IPs limit (-1 for unlimited)')
+          .setRequired(true)
+          .setMinValue(-1)
+          .setMaxValue(10000),
+      ),
   );
 
 /**
@@ -520,6 +537,33 @@ export async function execute(interaction) {
       });
     } catch (err) {
       const errEmbed = createErrorEmbed('Query Failed', 'Unable to retrieve suspended licenses.');
+      await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
+    }
+    return;
+  }
+
+  // H. Update License
+  if (subcommand === 'update') {
+    const key = interaction.options.getString('key').trim();
+    const maxIps = interaction.options.getInteger('max-ips');
+
+    try {
+      const license = await getLicenseByKey(key);
+      if (!license) {
+        const errEmbed = createErrorEmbed('Not Found', 'The requested license key does not exist.');
+        return await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
+      }
+
+      await updateLicenseMaxIps(key, maxIps, interaction.user.id);
+
+      const limitDisplay = maxIps === -1 ? 'Unlimited' : maxIps.toString();
+      const embed = createSuccessEmbed(
+        'License Updated',
+        `License key ${bold(maskKey(key))} has been successfully updated.\n\nNew IP whitelisting limit: ${bold(limitDisplay)}`,
+      );
+      await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    } catch (err) {
+      const errEmbed = createErrorEmbed('Update Failed', err.message);
       await interaction.reply({ embeds: [errEmbed], flags: MessageFlags.Ephemeral });
     }
     return;

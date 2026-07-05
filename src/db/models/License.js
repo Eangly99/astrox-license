@@ -93,7 +93,7 @@ licenseSchema.virtual('isExpired').get(function () {
 
 // Pre-save middleware to automatically transition status on expiry
 licenseSchema.pre('save', function (next) {
-  if (this.expiresAt && new Date() > this.expiresAt) {
+  if (this.status !== LICENSE_STATUS.REVOKED && this.expiresAt && new Date() > this.expiresAt) {
     this.status = LICENSE_STATUS.EXPIRED;
   }
   next();

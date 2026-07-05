@@ -9,6 +9,7 @@ import {
   validateLicense,
   transferLicense,
   updateLicenseIps,
+  updateLicenseMaxIps,
   revokeLicense,
   listLicenses,
   addBlacklist,
@@ -570,5 +571,80 @@ describe('License Service Integration Tests', () => {
 
     const check2 = await License.findById(lic._id).lean();
     expect(check2.status).toBe('active');
+  });
+
+  it('should support unlimited IPs (maxIps = -1)', async () => {
+    const lic = await createLicense(
+      {
+        pluginId: mockPlugin._id.toString(),
+        ownerId: 'unlimited_user',
+        ownerTag: 'Unlimited#0000',
+        type: 'lifetime',
+        maxIps: -1,
+      },
+      'admin_user_id',
+    );
+
+    // Validate from IP 1
+    let res = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '1.1.1.1',
+      hwid: 'hwid_1',
+    });
+    expect(res.valid).toBe(true);
+
+    // Validate from IP 2 (same HWID)
+    res = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '2.2.2.2',
+      hwid: 'hwid_1',
+    });
+    expect(res.valid).toBe(true);
+
+    // Validate from IP 3 (same HWID)
+    res = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '3.3.3.3',
+      hwid: 'hwid_1',
+    });
+    expect(res.valid).toBe(true);
+
+    // Verify allowedIps has all 3 IPs
+    const updated = await License.findById(lic._id).lean();
+    expect(updated.allowedIps).toEqual(['1.1.1.1', '2.2.2.2', '3.3.3.3']);
+
+    // Verify updateLicenseIps bypasses limit check
+    const updatedIps = await updateLicenseIps(lic.key, 'unlimited_user', ['1.1.1.1', '2.2.2.2', '3.3.3.3', '4.4.4.4', '5.5.5.5'], 'unlimited_user');
+    expect(updatedIps.allowedIps).toHaveLength(5);
+  });
+
+  it('should allow updating maxIps using updateLicenseMaxIps', async () => {
+    const lic = await createLicense(
+      {
+        pluginId: mockPlugin._id.toString(),
+        ownerId: 'update_limit_user',
+        ownerTag: 'LimitOwner#0000',
+        type: 'lifetime',
+        maxIps: 2,
+      },
+      'admin_user_id',
+    );
+
+    // Update to 5
+    await updateLicenseMaxIps(lic.key, 5, 'admin_user_id');
+    let updated = await License.findById(lic._id).lean();
+    expect(updated.maxIps).toBe(5);
+
+    // Update to -1 (unlimited)
+    await updateLicenseMaxIps(lic.key, -1, 'admin_user_id');
+    updated = await License.findById(lic._id).lean();
+    expect(updated.maxIps).toBe(-1);
+
+    // Try to update to invalid values (should throw)
+    await expect(updateLicenseMaxIps(lic.key, 0, 'admin_user_id')).rejects.toThrow();
+    await expect(updateLicenseMaxIps(lic.key, -2, 'admin_user_id')).rejects.toThrow();
   });
 });

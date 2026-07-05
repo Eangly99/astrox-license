@@ -7,7 +7,7 @@ export const generateLicenseSchema = z.object({
   userId: z.string().min(1),
   type: z.enum([LICENSE_TYPES.TRIAL, LICENSE_TYPES.LIFETIME, LICENSE_TYPES.SUBSCRIPTION]),
   duration: z.string().optional(),
-  maxIps: z.number().int().min(1).max(50).optional(),
+  maxIps: z.number().int().min(-1).max(10000).refine((val) => val !== 0, 'IP limit cannot be 0').optional(),
 });
 
 /** Validate the REST API /validate request body */

@@ -41,10 +41,10 @@ export function verifyLicenseKey(key) {
     .digest('hex')
     .slice(0, 16);
 
-  if (signature.length !== expectedSignature.length) return false;
+  const sigBuffer = Buffer.from(signature, 'utf8');
+  const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
 
-  const sigBuffer = Buffer.from(signature);
-  const expectedBuffer = Buffer.from(expectedSignature);
+  if (sigBuffer.length !== expectedBuffer.length) return false;
 
   return crypto.timingSafeEqual(sigBuffer, expectedBuffer);
 }

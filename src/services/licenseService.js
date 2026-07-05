@@ -284,7 +284,19 @@ async function validateLicenseInternal({ licenseKey, pluginId, serverIp }, hashe
   let updatedLicense = null;
 
   if (!isIpAllowed) {
-    if (license.allowedIps.length < license.maxIps) {
+    if (license.maxIps === -1) {
+      // Unlimited IPs: add it atomically to allowedIps for visibility/tracking, without capacity constraint
+      updatedLicense = await License.findOneAndUpdate(
+        { _id: license._id },
+        { $addToSet: { allowedIps: serverIp } },
+        { new: true },
+      );
+      if (updatedLicense) {
+        license.allowedIps = updatedLicense.allowedIps;
+        isIpAllowed = true;
+        log.info({ key: maskKey(licenseKey), ip: serverIp }, 'New IP added to license whitelist (unlimited)');
+      }
+    } else if (license.allowedIps.length < license.maxIps) {
       // Room available, add it atomically
       updatedLicense = await License.findOneAndUpdate(
         {
@@ -683,7 +695,7 @@ export async function updateLicenseIps(key, ownerId, ips, actorId) {
     throw new Error(`Cannot update IPs on a ${license.status} license.`);
   }
 
-  if (ips.length > license.maxIps) {
+  if (license.maxIps !== -1 && ips.length > license.maxIps) {
     throw new Error(
       `IP limit exceeded. Maximum allowed: ${license.maxIps}, provided: ${ips.length}`,
     );
@@ -781,4 +793,46 @@ export async function removeBlacklist({ type, value }, actorId) {
     await refreshBlacklistCache();
   }
   return entry;
+}
+
+/**
+ * Update maximum allowed IP addresses count for a license.
+ */
+export async function updateLicenseMaxIps(key, maxIps, actorId) {
+  log.info({ key: maskKey(key), maxIps, actorId }, 'Updating license IP limit...');
+
+  const license = await License.findOne({ key });
+  if (!license) {
+    throw new Error('License not found');
+  }
+
+  const newLimit = Number(maxIps);
+  if (isNaN(newLimit) || newLimit < -1 || newLimit === 0) {
+    throw new Error('Invalid IP limit provided');
+  }
+
+  const oldMaxIps = license.maxIps;
+  license.maxIps = newLimit;
+
+  // Clear active validation caches
+  if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
+    for (const keyToDel of license.activeCacheKeys) {
+      await cacheService.delete(keyToDel);
+    }
+    license.activeCacheKeys = [];
+  }
+
+  await license.save();
+  await cacheService.delete('stats:dashboard');
+
+  // Audit log
+  await AuditLog.log(AUDIT_ACTIONS.UPDATE_MAX_IPS, actorId, key, {
+    oldMaxIps,
+    newMaxIps: newLimit,
+  });
+
+  await cacheService.delete(`validate:${key}`);
+
+  log.info({ key: maskKey(key), oldMaxIps, newMaxIps: newLimit }, 'License IP limit updated successfully');
+  return license;
 }

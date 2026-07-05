@@ -276,6 +276,18 @@ describe('Admin API Route Tests', () => {
       const data = JSON.parse(res.body);
       expect(data.hwid).toBeNull();
     });
+
+    it('should update max IPs limit', async () => {
+      const res = await fastify.inject({
+        method: 'PUT',
+        url: `/api/v1/admin/licenses/${testLicense.key}/max-ips`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: { maxIps: 10 },
+      });
+      expect(res.statusCode).toBe(200);
+      const data = JSON.parse(res.body);
+      expect(data.maxIps).toBe(10);
+    });
   });
 
   describe('Plugin Registry Endpoints', () => {

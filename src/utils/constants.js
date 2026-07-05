@@ -25,6 +25,7 @@ export const AUDIT_ACTIONS = Object.freeze({
   BLACKLIST_ADD: 'blacklist_add',
   BLACKLIST_REMOVE: 'blacklist_remove',
   UPDATE_IPS: 'update_ips',
+  UPDATE_MAX_IPS: 'update_max_ips',
   EXPIRE: 'expire',
 });
 

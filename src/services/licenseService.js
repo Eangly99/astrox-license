@@ -172,6 +172,27 @@ export async function validateLicense(params) {
   // Execute validation pipeline
   const result = await validateLicenseInternal(params, hashedHwid, cacheKey);
 
+  // Cache verification result
+  if (result.valid) {
+    // Cache success for 60 seconds
+    await cacheService.set(cacheKey, result, 60000);
+  } else {
+    // Only cache permanent status-based failures to prevent database spamming on invalid keys/signatures
+    const permanentReasons = [
+      'Invalid license key signature',
+      'License key not registered',
+      'License has been revoked',
+      'License is suspended',
+      'License has expired',
+      'Associated plugin not found',
+      'License key is not valid for this plugin',
+      'This entity has been blacklisted',
+    ];
+    if (permanentReasons.includes(result.reason)) {
+      await cacheService.set(cacheKey, result, 15000);
+    }
+  }
+
   // Log validation asynchronously
   logValidationToDiscord(params, result).catch((err) => {
     log.error({ err }, 'Failed to process Discord log notification');
@@ -458,9 +479,6 @@ async function validateLicenseInternal({ licenseKey, pluginId, serverIp, port },
     },
   };
 
-  // 12. Cache verification success (60s TTL)
-  await cacheService.set(cacheKey, result, 60000);
-
   return result;
 }
 
@@ -627,16 +645,19 @@ export async function listLicenses({ ownerId, pluginId, status, page = 1, limit 
   }
   if (status) query.status = status;
 
-  const total = await License.countDocuments(query);
+  const skip = Math.max(0, (page - 1) * limit);
+
+  const [total, licenses] = await Promise.all([
+    License.countDocuments(query),
+    License.find(query)
+      .populate('pluginId')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+  ]);
+
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const currentPage = Math.min(page, totalPages);
-  const skip = (currentPage - 1) * limit;
-
-  const licenses = await License.find(query)
-    .populate('pluginId')
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(limit);
 
   return {
     licenses: licenses.map((l) => l.toObject()),
@@ -667,39 +688,45 @@ export async function getStats() {
     return cached;
   }
 
-  const total = await License.countDocuments();
-  const active = await License.countDocuments({ status: LICENSE_STATUS.ACTIVE });
-  const suspended = await License.countDocuments({ status: LICENSE_STATUS.SUSPENDED });
-  const revoked = await License.countDocuments({ status: LICENSE_STATUS.REVOKED });
-  const expired = await License.countDocuments({ status: LICENSE_STATUS.EXPIRED });
-
-  // Breakdown by type
-  const typeBreakdown = await License.aggregate([{ $group: { _id: '$type', count: { $sum: 1 } } }]);
-
-  // Breakdown by plugin
-  const pluginBreakdown = await License.aggregate([
-    {
-      $group: {
-        _id: '$pluginId',
-        count: { $sum: 1 },
+  const [
+    total,
+    active,
+    suspended,
+    revoked,
+    expired,
+    typeBreakdown,
+    pluginBreakdown,
+  ] = await Promise.all([
+    License.countDocuments(),
+    License.countDocuments({ status: LICENSE_STATUS.ACTIVE }),
+    License.countDocuments({ status: LICENSE_STATUS.SUSPENDED }),
+    License.countDocuments({ status: LICENSE_STATUS.REVOKED }),
+    License.countDocuments({ status: LICENSE_STATUS.EXPIRED }),
+    License.aggregate([{ $group: { _id: '$type', count: { $sum: 1 } } }]),
+    License.aggregate([
+      {
+        $group: {
+          _id: '$pluginId',
+          count: { $sum: 1 },
+        },
       },
-    },
-    {
-      $lookup: {
-        from: 'plugins',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'pluginInfo',
+      {
+        $lookup: {
+          from: 'plugins',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'pluginInfo',
+        },
       },
-    },
-    { $unwind: '$pluginInfo' },
-    {
-      $project: {
-        name: '$pluginInfo.name',
-        slug: '$pluginInfo.slug',
-        count: 1,
+      { $unwind: '$pluginInfo' },
+      {
+        $project: {
+          name: '$pluginInfo.name',
+          slug: '$pluginInfo.slug',
+          count: 1,
+        },
       },
-    },
+    ]),
   ]);
 
   const result = {

@@ -18,6 +18,7 @@ const auditLogSchema = new Schema({
   targetKey: {
     type: String,
     default: null,
+    index: true,
   },
   details: {
     type: Schema.Types.Mixed,

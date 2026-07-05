@@ -740,4 +740,41 @@ describe('License Service Integration Tests', () => {
     });
     expect(res.valid).toBe(true);
   });
+
+  it('should allow any IP to access if wildcard (*) or (0.0.0.0) is whitelisted', async () => {
+    const lic = await createLicense(
+      {
+        pluginId: mockPlugin._id.toString(),
+        ownerId: 'wildcard_user',
+        ownerTag: 'WildcardOwner#0000',
+        type: 'lifetime',
+        maxIps: 2,
+      },
+      'admin_user_id',
+    );
+
+    // Manually update whitelisted IPs to include '*'
+    await updateLicenseIps(lic.key, 'wildcard_user', ['*'], 'admin_user_id');
+
+    // Verify it accepts validation from any IP (e.g. 5.5.5.5, 9.9.9.9) and does not add them to the allowedIps list
+    let res = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '5.5.5.5',
+      hwid: 'wildcard_hwid_1',
+    });
+    expect(res.valid).toBe(true);
+
+    res = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '9.9.9.9',
+      hwid: 'wildcard_hwid_1',
+    });
+    expect(res.valid).toBe(true);
+
+    // Verify allowedIps list remains exactly ['*']
+    const updated = await License.findById(lic._id).lean();
+    expect(updated.allowedIps).toEqual(['*']);
+  });
 });

@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import validateRoute from './routes/validate.js';
+import presenceRoute from './routes/presence.js';
 import adminRoute from './routes/admin.js';
 import { config } from '../utils/config.js';
 import { createLogger } from '../utils/logger.js';
@@ -76,6 +77,9 @@ async function setupServer() {
 
   // 4. Handshake validation route
   await fastify.register(validateRoute);
+
+  // 4.5 SaaS Presence resolution route
+  await fastify.register(presenceRoute);
 
   // 5. Admin routes
   await fastify.register(adminRoute);

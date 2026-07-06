@@ -5,6 +5,7 @@ import { loadCommands, loadEvents } from './bot/handler.js';
 import { client } from './bot/client.js';
 import { startApi, stopApi } from './api/server.js';
 import { startScheduler, stopScheduler } from './utils/scheduler.js';
+import { initKeys } from './services/signatureService.js';
 
 logger.info(
   {
@@ -19,6 +20,9 @@ let isShuttingDown = false;
 
 async function bootstrap() {
   try {
+    // 0. Initialize RSA keys for SaaS signature
+    initKeys();
+
     // 1. Core Persistence
     await connectDatabase();
 

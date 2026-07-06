@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { jwtVerify } from 'jose';
 import rateLimit from '@fastify/rate-limit';
 import { config } from '../../utils/config.js';
-import { LICENSE_STATUS, LICENSE_TYPES, AUDIT_ACTIONS, BLACKLIST_TYPES } from '../../utils/constants.js';
+import { LICENSE_STATUS, LICENSE_TYPES, AUDIT_ACTIONS } from '../../utils/constants.js';
 import License from '../../db/models/License.js';
 import Plugin from '../../db/models/Plugin.js';
 import Blacklist from '../../db/models/Blacklist.js';
@@ -18,6 +18,7 @@ import {
   updateLicenseIps,
   updateLicenseMaxIps,
   updateLicenseMaxServersPerIp,
+  updateLicenseAutoResetHwid,
   addBlacklist,
   removeBlacklist,
   getStats,
@@ -472,6 +473,35 @@ export default async function (fastify) {
         const actorId = request.adminUser.userId;
 
         const updatedLicense = await updateLicenseMaxServersPerIp(key, maxServers, actorId);
+        return reply.send(updatedLicense.toJSON());
+      } catch (err) {
+        return reply.code(400).send({ error: err.message });
+      }
+    },
+  );
+
+  // 10.7 PUT /api/v1/admin/licenses/:key/auto-reset-hwid
+  fastify.put(
+    '/api/v1/admin/licenses/:key/auto-reset-hwid',
+    {
+      preHandler: authenticateAdmin,
+      schema: {
+        body: {
+          type: 'object',
+          required: ['enabled'],
+          properties: {
+            enabled: { type: 'boolean' },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { key } = request.params;
+        const { enabled } = request.body;
+        const actorId = request.adminUser.userId;
+
+        const updatedLicense = await updateLicenseAutoResetHwid(key, enabled, actorId);
         return reply.send(updatedLicense.toJSON());
       } catch (err) {
         return reply.code(400).send({ error: err.message });

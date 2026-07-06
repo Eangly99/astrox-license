@@ -23,7 +23,7 @@ const log = createLogger('license-service');
  * Create a new license key for a user and plugin.
  */
 export async function createLicense(
-  { pluginId, ownerId, ownerTag, type, duration, maxIps = 1, sharedDetectionThreshold = 3 },
+  { pluginId, ownerId, ownerTag, type, duration, maxIps = 1, sharedDetectionThreshold = 3, maxServersPerIp = 1, autoResetHwid = true },
   actorId,
 ) {
   log.info({ pluginId, ownerId, type, maxIps, actorId }, 'Creating license...');
@@ -69,6 +69,8 @@ export async function createLicense(
     ownerTag,
     type,
     maxIps,
+    maxServersPerIp,
+    autoResetHwid,
     sharedDetectionThreshold,
     expiresAt,
   });
@@ -294,11 +296,85 @@ async function validateLicenseInternal({ licenseKey, pluginId, serverIp, port },
       );
     }
   } else if (license.hwid !== hashedHwid) {
-    log.warn(
-      { key: maskKey(licenseKey), expected: license.hwid, got: hashedHwid },
-      'HWID mismatch',
-    );
-    return { valid: false, reason: 'Hardware ID binding mismatch' };
+    if (license.autoResetHwid !== false && license.maxIps === -1 && (license.maxServersPerIp ?? 1) === 1) {
+      // Check if there are any active instances globally across all whitelisted IPs
+      let activeCountGlobal = 0;
+      const currentTime = Date.now();
+      const heartbeatExpiry = 150 * 1000; // 2.5 minutes window
+
+      if (license.allowedIps && license.allowedIps.length > 0) {
+        for (const ip of license.allowedIps) {
+          const cacheKeyInstances = `active_instances:${licenseKey}:${ip}`;
+          const activeInstancesMap = await cacheService.get(cacheKeyInstances) || {};
+          for (const lastSeen of Object.values(activeInstancesMap)) {
+            if (currentTime - Number(lastSeen) < heartbeatExpiry) {
+              activeCountGlobal++;
+            }
+          }
+        }
+      }
+
+      if (activeCountGlobal === 0) {
+        // Clear active validation caches first
+        if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
+          for (const keyToDel of license.activeCacheKeys) {
+            await cacheService.delete(keyToDel);
+          }
+          license.activeCacheKeys = [];
+        }
+
+        const oldHwid = license.hwid;
+        const hwidUpdatedLicense = await License.findOneAndUpdate(
+          { _id: license._id, hwid: oldHwid },
+          { $set: { hwid: hashedHwid, activatedAt: new Date(), activeCacheKeys: [] } },
+          { new: true },
+        );
+
+        if (!hwidUpdatedLicense) {
+          // Lost race to a concurrent request, fetch DB value
+          const reFetched = await License.findById(license._id);
+          if (!reFetched || reFetched.hwid !== hashedHwid) {
+            log.warn(
+              { key: maskKey(licenseKey), expected: reFetched?.hwid, got: hashedHwid },
+              'HWID mismatch after concurrent auto-reset attempt',
+            );
+            return { valid: false, reason: 'Hardware ID binding mismatch' };
+          }
+          license.hwid = reFetched.hwid;
+          license.activatedAt = reFetched.activatedAt;
+          license.activeCacheKeys = reFetched.activeCacheKeys;
+        } else {
+          license.hwid = hashedHwid;
+          license.activatedAt = hwidUpdatedLicense.activatedAt;
+          license.activeCacheKeys = [];
+          log.info(
+            { key: maskKey(licenseKey), oldHwid, newHwid: hashedHwid },
+            'HWID automatically reset and bound for single-instance unlimited-IP license',
+          );
+        }
+
+        await AuditLog.log(AUDIT_ACTIONS.UPDATE_IPS, 'system', licenseKey, {
+          oldHwid,
+          newHwid: hashedHwid,
+          hwidReset: true,
+          reason: 'Auto-reset for single-instance unlimited-IP license',
+        });
+
+        await cacheService.delete(`validate:${licenseKey}`);
+      } else {
+        log.warn(
+          { key: maskKey(licenseKey), expected: license.hwid, got: hashedHwid, activeCountGlobal },
+          'HWID mismatch: cannot auto-reset because another instance is active',
+        );
+        return { valid: false, reason: 'Hardware ID binding mismatch' };
+      }
+    } else {
+      log.warn(
+        { key: maskKey(licenseKey), expected: license.hwid, got: hashedHwid },
+        'HWID mismatch',
+      );
+      return { valid: false, reason: 'Hardware ID binding mismatch' };
+    }
   }
 
   // 8. Whitelist IP or check limit
@@ -418,7 +494,7 @@ async function validateLicenseInternal({ licenseKey, pluginId, serverIp, port },
   const activePort = Number(port || 25565);
   const cacheKeyInstances = `active_instances:${licenseKey}:${serverIp}`;
   
-  let activeInstancesMap = await cacheService.get(cacheKeyInstances) || {};
+  const activeInstancesMap = await cacheService.get(cacheKeyInstances) || {};
   const currentTime = Date.now();
   const heartbeatExpiry = 150 * 1000; // 2.5 minutes expiration window
   
@@ -949,5 +1025,45 @@ export async function updateLicenseMaxServersPerIp(key, maxServers, actorId) {
   await cacheService.delete(`validate:${key}`);
 
   log.info({ key: maskKey(key), oldLimit, newLimit }, 'License concurrent server limit updated successfully');
+  return license;
+}
+
+/**
+ * Update autoResetHwid setting for a license.
+ */
+export async function updateLicenseAutoResetHwid(key, autoReset, actorId) {
+  log.info({ key: maskKey(key), autoReset, actorId }, 'Updating license auto-reset HWID setting...');
+
+  const license = await License.findOne({ key });
+  if (!license) {
+    throw new Error('License not found');
+  }
+
+  const oldSetting = license.autoResetHwid ?? true;
+  license.autoResetHwid = !!autoReset;
+
+  // Clear active validation caches if setting changed
+  if (oldSetting !== license.autoResetHwid) {
+    if (license.activeCacheKeys && license.activeCacheKeys.length > 0) {
+      for (const keyToDel of license.activeCacheKeys) {
+        await cacheService.delete(keyToDel);
+      }
+      license.activeCacheKeys = [];
+    }
+  }
+
+  await license.save();
+  await cacheService.delete('stats:dashboard');
+
+  // Audit log
+  await AuditLog.log(AUDIT_ACTIONS.UPDATE_IPS, actorId, key, {
+    autoResetHwidChanged: true,
+    oldSetting,
+    newSetting: license.autoResetHwid,
+  });
+
+  await cacheService.delete(`validate:${key}`);
+
+  log.info({ key: maskKey(key), oldSetting, newSetting: license.autoResetHwid }, 'License auto-reset HWID setting updated successfully');
   return license;
 }

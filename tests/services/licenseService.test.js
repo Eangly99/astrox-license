@@ -4,6 +4,9 @@ import Plugin from '../../src/db/models/Plugin.js';
 import License from '../../src/db/models/License.js';
 import Blacklist from '../../src/db/models/Blacklist.js';
 import AuditLog from '../../src/db/models/AuditLog.js';
+import { hashHwid } from '../../src/services/cryptoService.js';
+import { AUDIT_ACTIONS } from '../../src/utils/constants.js';
+import { maskKey } from '../../src/utils/formatters.js';
 import {
   createLicense,
   validateLicense,
@@ -11,6 +14,7 @@ import {
   updateLicenseIps,
   updateLicenseMaxIps,
   updateLicenseMaxServersPerIp,
+  updateLicenseAutoResetHwid,
   revokeLicense,
   listLicenses,
   addBlacklist,
@@ -776,5 +780,173 @@ describe('License Service Integration Tests', () => {
     // Verify allowedIps list remains exactly ['*']
     const updated = await License.findById(lic._id).lean();
     expect(updated.allowedIps).toEqual(['*']);
+  });
+
+  it('should auto-reset HWID for single-instance licenses with unlimited IPs on HWID mismatch', async () => {
+    const lic = await createLicense(
+      {
+        pluginId: mockPlugin._id.toString(),
+        ownerId: 'autoreset_user',
+        ownerTag: 'AutoResetOwner#0000',
+        type: 'lifetime',
+        maxIps: -1, // Unlimited IPs
+      },
+      'admin_user_id',
+    );
+
+    // Ensure it is a single-instance license
+    await updateLicenseMaxServersPerIp(lic.key, 1, 'admin_user_id');
+
+    // First validation - binds HWID
+    let res = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '1.1.1.1',
+      hwid: 'hwid_one',
+      port: 25565,
+    });
+    expect(res.valid).toBe(true);
+
+    const afterFirst = await License.findById(lic._id);
+    expect(afterFirst.hwid).not.toBeNull();
+
+    // Second validation - different HWID and different IP while first instance is STILL active -> fails
+    res = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '2.2.2.2',
+      hwid: 'hwid_two',
+      port: 25565,
+    });
+    expect(res.valid).toBe(false);
+    expect(res.reason).toBe('Hardware ID binding mismatch');
+
+    // Simulate the first instance stopping by clearing its active instance cache tracker
+    await cacheService.delete(`active_instances:${lic.key}:1.1.1.1`);
+
+    // Third validation - different HWID and different IP after first instance has stopped -> succeeds (auto-resets HWID)
+    res = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '2.2.2.2',
+      hwid: 'hwid_two',
+      port: 25565,
+    });
+    expect(res.valid).toBe(true);
+
+    // Verify DB reflects new HWID and new IP in whitelist
+    const afterSecond = await License.findById(lic._id);
+    const expectedSecondHwid = hashHwid('hwid_two');
+    expect(afterSecond.hwid).toBe(expectedSecondHwid);
+    expect(afterSecond.allowedIps).toContain('2.2.2.2');
+
+    // Audit logs should reflect the update_ips action with hwidReset: true
+    const auditLogs = await AuditLog.find({ targetKey: maskKey(lic.key) }).lean();
+    const resetLog = auditLogs.find((l) => l.action === AUDIT_ACTIONS.UPDATE_IPS);
+    expect(resetLog).toBeDefined();
+    expect(resetLog.details.hwidReset).toBe(true);
+  });
+
+  it('should NOT auto-reset HWID if license allows multiple instances or has limited IPs', async () => {
+    // Case 1: Unlimited IPs but maxServersPerIp > 1 (e.g. 2)
+    const lic1 = await createLicense(
+      {
+        pluginId: mockPlugin._id.toString(),
+        ownerId: 'no_autoreset_user_1',
+        ownerTag: 'NoAutoResetOwner1#0000',
+        type: 'lifetime',
+        maxIps: -1,
+      },
+      'admin_user_id',
+    );
+    await updateLicenseMaxServersPerIp(lic1.key, 2, 'admin_user_id');
+
+    let res = await validateLicense({
+      licenseKey: lic1.key,
+      pluginId: 'test-plugin',
+      serverIp: '1.1.1.1',
+      hwid: 'hwid_one',
+    });
+    expect(res.valid).toBe(true);
+
+    res = await validateLicense({
+      licenseKey: lic1.key,
+      pluginId: 'test-plugin',
+      serverIp: '2.2.2.2',
+      hwid: 'hwid_two',
+    });
+    expect(res.valid).toBe(false);
+    expect(res.reason).toBe('Hardware ID binding mismatch');
+
+    // Case 2: Limited IPs (e.g. maxIps = 1) and maxServersPerIp = 1
+    const lic2 = await createLicense(
+      {
+        pluginId: mockPlugin._id.toString(),
+        ownerId: 'no_autoreset_user_2',
+        ownerTag: 'NoAutoResetOwner2#0000',
+        type: 'lifetime',
+        maxIps: 1,
+      },
+      'admin_user_id',
+    );
+    await updateLicenseMaxServersPerIp(lic2.key, 1, 'admin_user_id');
+
+    res = await validateLicense({
+      licenseKey: lic2.key,
+      pluginId: 'test-plugin',
+      serverIp: '1.1.1.1',
+      hwid: 'hwid_one',
+    });
+    expect(res.valid).toBe(true);
+
+    res = await validateLicense({
+      licenseKey: lic2.key,
+      pluginId: 'test-plugin',
+      serverIp: '2.2.2.2',
+      hwid: 'hwid_two',
+    });
+    expect(res.valid).toBe(false);
+    expect(res.reason).toBe('Hardware ID binding mismatch');
+  });
+
+  it('should NOT auto-reset HWID if autoResetHwid is set to false', async () => {
+    const lic = await createLicense(
+      {
+        pluginId: mockPlugin._id.toString(),
+        ownerId: 'autoreset_disabled_user',
+        ownerTag: 'AutoResetDisabledOwner#0000',
+        type: 'lifetime',
+        maxIps: -1, // Unlimited IPs
+      },
+      'admin_user_id',
+    );
+
+    // Explicitly disable auto-reset
+    await updateLicenseAutoResetHwid(lic.key, false, 'admin_user_id');
+    await updateLicenseMaxServersPerIp(lic.key, 1, 'admin_user_id');
+
+    // First validation - binds HWID
+    let res = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '1.1.1.1',
+      hwid: 'hwid_one',
+      port: 25565,
+    });
+    expect(res.valid).toBe(true);
+
+    // Simulate the first instance stopping by clearing its active instance cache tracker
+    await cacheService.delete(`active_instances:${lic.key}:1.1.1.1`);
+
+    // Second validation - different HWID and different IP after first instance has stopped -> still fails because autoResetHwid is disabled
+    res = await validateLicense({
+      licenseKey: lic.key,
+      pluginId: 'test-plugin',
+      serverIp: '2.2.2.2',
+      hwid: 'hwid_two',
+      port: 25565,
+    });
+    expect(res.valid).toBe(false);
+    expect(res.reason).toBe('Hardware ID binding mismatch');
   });
 });

@@ -300,6 +300,18 @@ describe('Admin API Route Tests', () => {
       const data = JSON.parse(res.body);
       expect(data.maxServersPerIp).toBe(5);
     });
+
+    it('should update auto-reset HWID option', async () => {
+      const res = await fastify.inject({
+        method: 'PUT',
+        url: `/api/v1/admin/licenses/${testLicense.key}/auto-reset-hwid`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: { enabled: false },
+      });
+      expect(res.statusCode).toBe(200);
+      const data = JSON.parse(res.body);
+      expect(data.autoResetHwid).toBe(false);
+    });
   });
 
   describe('Plugin Registry Endpoints', () => {

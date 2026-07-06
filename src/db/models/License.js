@@ -50,6 +50,10 @@ const licenseSchema = new Schema(
       type: Number,
       default: SHARED_DETECTION_THRESHOLD,
     },
+    autoResetHwid: {
+      type: Boolean,
+      default: true,
+    },
     allowedIps: {
       type: [String],
       default: [],

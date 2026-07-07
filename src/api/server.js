@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import rateLimit from '@fastify/rate-limit';
+import Redis from 'ioredis';
 import validateRoute from './routes/validate.js';
 import presenceRoute from './routes/presence.js';
 import adminRoute from './routes/admin.js';
@@ -15,12 +16,32 @@ export const fastify = Fastify({
   trustProxy: config.NODE_ENV === 'production' || !!config.REDIS_URI,
 });
 
+let redisClient = null;
+
+if (config.REDIS_URI) {
+  try {
+    const uriForLogging = config.REDIS_URI.replace(/:[^:]*@/, ':****@');
+    log.info({ uri: uriForLogging }, 'Initializing Redis client for rate limiting...');
+    redisClient = new Redis(config.REDIS_URI, {
+      connectTimeout: 5000,
+      maxRetriesPerRequest: 1,
+    });
+    redisClient.on('error', (err) => {
+      log.error({ err }, 'Rate limiting Redis connection error');
+    });
+  } catch (err) {
+    log.error({ err }, 'Failed to construct Redis client for rate limiting');
+  }
+}
+
 // Register Plugins & Routes
 async function setupServer() {
   // 1. Rate Limiting per IP
   await fastify.register(rateLimit, {
     max: config.NODE_ENV === 'test' ? 10000 : RATE_LIMITS.API_MAX,
     timeWindow: RATE_LIMITS.API_WINDOW,
+    redis: redisClient || undefined,
+    skipOnError: true,
     skip: (request) => {
       // Exempt admin dashboard routes from the global rate limit
       return request.url.startsWith('/api/v1/admin');
@@ -124,5 +145,15 @@ export async function stopApi() {
     log.info('API Handshake Server stopped');
   } catch (err) {
     log.error({ err }, 'Error closing API Handshake Server');
+  }
+
+  if (redisClient) {
+    log.info('Disconnecting rate limiter Redis client...');
+    try {
+      await redisClient.quit();
+      log.info('Rate limiter Redis client disconnected');
+    } catch (err) {
+      log.error({ err }, 'Failed to gracefully disconnect rate limiter Redis client');
+    }
   }
 }

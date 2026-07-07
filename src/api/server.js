@@ -17,6 +17,8 @@ export const fastify = Fastify({
 });
 
 let redisClient = null;
+let lastErrorLoggedTime = 0;
+const LOG_THROTTLE_MS = 30000;
 
 if (config.REDIS_URI) {
   try {
@@ -25,9 +27,17 @@ if (config.REDIS_URI) {
     redisClient = new Redis(config.REDIS_URI, {
       connectTimeout: 5000,
       maxRetriesPerRequest: 1,
+      retryStrategy(times) {
+        // Backoff exponentially up to 15s to prevent reconnect spamming
+        return Math.min(times * 1000, 15000);
+      },
     });
     redisClient.on('error', (err) => {
-      log.error({ err }, 'Rate limiting Redis connection error');
+      const now = Date.now();
+      if (now - lastErrorLoggedTime > LOG_THROTTLE_MS) {
+        log.error({ err }, 'Rate limiting Redis connection error (throttled)');
+        lastErrorLoggedTime = now;
+      }
     });
   } catch (err) {
     log.error({ err }, 'Failed to construct Redis client for rate limiting');

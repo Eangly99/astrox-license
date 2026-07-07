@@ -11,6 +11,8 @@ let consecutiveFailures = 0;
 const FAILURE_THRESHOLD = 3;
 let fallbackMemoryInstance = null;
 let recoveryTimer = null;
+let lastCacheErrorLoggedTime = 0;
+const CACHE_LOG_THROTTLE_MS = 30000;
 
 try {
   if (config.REDIS_URI) {
@@ -19,7 +21,11 @@ try {
     
     // Register error handler to prevent process crashes
     keyvInstance.on('error', (err) => {
-      log.error({ err }, 'Keyv Redis connection error');
+      const now = Date.now();
+      if (now - lastCacheErrorLoggedTime > CACHE_LOG_THROTTLE_MS) {
+        log.error({ err }, 'Keyv Redis connection error (throttled)');
+        lastCacheErrorLoggedTime = now;
+      }
       isRedisHealthy = false;
       handleFailure();
     });
@@ -38,7 +44,13 @@ function handleFailure() {
     if (consecutiveFailures >= FAILURE_THRESHOLD) {
       log.warn('Redis cache has failed repeatedly. Activating fast in-memory fallback cache...');
       fallbackMemoryInstance = new Keyv();
-      fallbackMemoryInstance.on('error', (err) => log.error({ err }, 'Fallback cache error'));
+      fallbackMemoryInstance.on('error', (err) => {
+        const now = Date.now();
+        if (now - lastCacheErrorLoggedTime > CACHE_LOG_THROTTLE_MS) {
+          log.error({ err }, 'Fallback cache error (throttled)');
+          lastCacheErrorLoggedTime = now;
+        }
+      });
       startRecoveryCheck();
     }
   }

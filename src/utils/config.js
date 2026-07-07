@@ -15,7 +15,16 @@ const envSchema = z.object({
     .string()
     .min(1, 'ADMIN_DISCORD_IDS is required')
     .transform((v) => v.split(',').map((id) => id.replace(/['"]/g, '').trim())),
-  REDIS_URI: z.string().optional().default(''),
+  REDIS_URI: z
+    .string()
+    .optional()
+    .default('')
+    .transform((v) => {
+      if (v && v.includes('upstash.io') && v.startsWith('redis://')) {
+        return v.replace(/^redis:\/\//, 'rediss://');
+      }
+      return v;
+    }),
   LOG_CHANNEL_ID: z.string().optional().default(''),
   HMAC_SECRET: z.string().min(32, 'HMAC_SECRET must be at least 32 characters'),
   API_PORT: z

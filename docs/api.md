@@ -1,53 +1,115 @@
-# REST Validation API
+# REST Validation API Documentation
 
-Validation requests are managed by Fastify. Exposes a single validation handshake endpoint.
+AstroX License exposes a secure, high-performance REST validation endpoint managed by Fastify. This checkpoint is designed to verify license state, bind HWIDs, track IP whitelist boundaries, and block blacklisted targets.
 
-## Endpoint Structure
+---
 
-```http
-POST /api/v1/validate
+## 📡 Validation Endpoint
+
+- **Method**: `POST`
+- **Route**: `/api/v1/validate`
+- **Content-Type**: `application/json`
+- **Rate Limiting**: 10 validation requests per minute per IP address.
+
+### Request Body Parameters
+
+The server expects a JSON payload containing the following properties:
+
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `licenseKey` | String | **Yes** | The full signed license key (`uuid.signature_prefix`). |
+| `pluginId` | String | **Yes** | The unique registered plugin slug (e.g. `my-plugin-slug`). |
+| `serverIp` | String | **Yes** | Client host IP address (IPv4 or IPv6 format). |
+| `hwid` | String | **Yes** | Raw or hashed client system hardware fingerprint (min 8, max 128 characters). |
+| `port` | Integer | No | Host server listening port (range 1–65535). |
+
+---
+
+## 🔒 Verification Order of Operations
+
+Upon receiving a request, the server executes validation checks in this sequence:
+
+```
+[Incoming Request]
+        │
+        ▼
+[1. Request Schema Validation]  ──(Failure)──>  [400 Bad Request]
+        │
+        ▼
+[2. Global Blacklist Lookup]    ──(Match)────>  [403 Forbidden (Obfuscated)]
+        │
+        ▼
+[3. Cryptographic Signature]    ──(Invalid)──>  [403 Forbidden (Obfuscated)]
+        │
+        ▼
+[4. Mongoose DB License Lookup] ──(Not Found)─>  [403 Forbidden (Obfuscated)]
+        │
+        ▼
+[5. HWID and Expiration Check]  ──(Failed)───>  [403 Forbidden (Obfuscated)]
+        │
+        ▼
+[6. IP Whitelist Limits & Logs] ──(Over Limit)─> [403 Forbidden (Obfuscated)]
+        │
+        ▼
+[7. Generate Session Token (JWT)]
+        │
+        ▼
+[200 OK Response]
 ```
 
-### Request Headers
+---
 
-```http
-Content-Type: application/json
-User-Agent: AstroXLicense-Handshake-Java
-```
+## 📋 Response Status Definitions
 
-### Request Body (JSON)
-
-```json
-{
-  "licenseKey": "a1b2c3d4-e5f6-7890-abcd-ef1234567890.1a2b3c4d5e6f7g8h",
-  "pluginId": "my-plugin",
-  "serverIp": "192.168.1.100",
-  "hwid": "my-server-hardware-hash-fingerprint"
-}
-```
-
-### Response (Success - 200 OK)
-
-Returns validation token (JWT expires in 60s) allowing local verification cache, along with the Discord details of the license owner.
+### 1. Success (200 OK)
+Returned when all security checks pass. The response contains a short-lived (60s) validation token (JWT signed with HS256 using `HMAC_SECRET`) and Discord tags of the buyer.
 
 ```json
 {
   "status": "valid",
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ey...",
   "discord": {
-    "ownerId": "123456789012345678",
-    "ownerTag": "username"
+    "ownerId": "182736455463728190",
+    "ownerTag": "license_owner_username"
   }
 }
 ```
 
-### Response (Rejected - 403 Forbidden)
+### 2. Bad Request (400 Bad Request)
+Returned when input parameters are missing, malformed (e.g., invalid IP address format), or exceed character limits.
+```json
+{
+  "error": "Invalid request"
+}
+```
 
-Returns an obfuscated generic error to prevent verification signature analysis.
+### 3. Verification Failed (403 Forbidden)
+Returned when the license check is rejected for any security reason (e.g., license suspended/revoked, HWID mismatch, IP whitelisting limits exceeded, blacklisted status, or invalid key signature). 
+
+> [!WARNING]
+> To prevent crackers from analyzing key verification mechanisms or probing for valid inputs, **all validation rejections return this identical obfuscated response**.
 
 ```json
 {
   "status": "invalid",
   "error": "License validation failed"
+}
+```
+
+### 4. Rate Limited (429 Too Many Requests)
+Returned when the client exceeds the configured rate limits (10 requests per minute per IP). The client should use its local JWT cache during this window.
+```json
+{
+  "statusCode": 429,
+  "error": "Too Many Requests",
+  "message": "Rate limit exceeded, retry in 42 seconds"
+}
+```
+
+### 5. Internal Server Error (500 Internal Server Error)
+Returned when an unexpected server error occurs during database operations or JWT generation.
+```json
+{
+  "error": "Internal server error"
 }
 ```

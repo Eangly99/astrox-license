@@ -1,149 +1,158 @@
-# AstroX License
+# AstroX License (Bot & REST API)
 
-A high-performance Discord bot and REST API for managing, verifying, and distributing licenses for Minecraft plugins (Spigot/Paper). Built using Node.js (v23+) and Discord.js v14.
+A high-performance, secure license management suite built with **Node.js (v23+)** and **Discord.js v14**. AstroX License allows plugin developers to securely generate, verify, and monitor licenses for Minecraft plugins (Spigot/Paper) with zero friction.
 
 ---
 
-## 🏗️ System Architecture
+## 🏗️ Architecture Overview
+
+The system runs a **Fastify REST API server** for remote client validation handshakes alongside a **Discord Bot Client** for client/admin interactions and self-service panel commands.
 
 ```
-[Minecraft Plugin]
-       │ (POST /api/v1/validate)
-       ▼
- ┌───────────┐         ┌────────────────────────┐
- │ Fastify   │ ──────> │  licenseService.js     │
- │ REST API  │ <────── │  (Crypto validation)   │
- └───────────┘         └────────────────────────┘
-                                   │
- ┌───────────┐                     ├───> [ MongoDB (Mongoose) ]
- │ Discord   │ ──(Interactions)──> │
- │ Bot Client│                     └───> [ Cache (Keyv / Redis) ]
- └───────────┘
+                    ┌────────────────────────────┐
+                    │       Discord Client       │
+                    └─────────────┬──────────────┘
+                                  │ (Slash / Interactions)
+                                  ▼
+┌──────────────────┐  HTTP POST  ┌───────────────┐     ┌───────────────┐
+│ Java Plugin/SDK  ├────────────>│  Fastify API  ├────>│ MongoDB DB    │
+└──────────────────┘             └───────┬───────┘     └───────────────┘
+                                         │
+                                         ▼
+                                 ┌───────────────┐
+                                 │ Redis / Cache │
+                                 └───────────────┘
 ```
 
 ---
 
 ## 🔑 Core Features
 
-1. **Cryptographic License Keys**: Keys are standard UUID v4 signed with HMAC-SHA256 signatures, preventing license key forging.
-2. **HWID Binding**: Licenses are locked to a server hardware fingerprint (SHA-256 hash) on the first validation handshake.
-3. **IP Whitelisting**: Allows configuring the maximum allowed unique IPs per license (default: 1).
-4. **Shared License Detection**: Automatically suspends licenses that perform validation handshakes from more than 3 unique IPs in 24 hours.
-5. **Global Blacklist**: Admin console to blacklist specific keys, IPs, or HWIDs.
-6. **Graceful Lifecycles**: Fully handles SIGTERM and SIGINT signals, ensuring connections to Fastify, MongoDB, and Discord are drained properly before shutdown.
+- **Cryptographic Keys**: License keys are generated as HMAC-SHA256 signatures of a secure UUID, protecting against brute-forcing and forging attempts.
+- **HWID Machine Lock**: Binds client licenses dynamically to the server's unique hardware fingerprint (SHA-256 hashed) during the initial handshake.
+- **IP Whitelisting & Self-Management**: Supports whitelisting a configurable limit of concurrent IPs (default: 1) and lets users update their IPs via `/mylicense`.
+- **Shared License Abuse Prevention**: Suspends license keys automatically if they perform handshakes from more than 3 unique IP addresses within a rolling 24-hour window.
+- **Timing-Safe Checks & Obfuscation**: Uses `crypto.timingSafeEqual` for validation, and returns generic obfuscated `403 Forbidden` responses for all validation failures.
+- **Audit Trails**: Logs all key generations, transfers, revocations, and system actions in a collection with a 90-day automatic retention index (TTL).
+- **Graceful Shutdown**: Properly intercepts `SIGTERM` and `SIGINT` signals, closing Fastify and database connection pools without losing in-flight validations.
 
 ---
 
-## 🗂️ Environment Variables
+## ⚙️ Configuration (.env)
 
-Copy `.env.example` to `.env` and fill in the values:
+Duplicate `.env.example` to `.env` and populate the required parameters:
 
 ```env
-BOT_TOKEN=                  # Discord Bot Token (from developer portal)
-CLIENT_ID=                  # Discord Application/Client ID
-GUILD_ID=                   # Discord Server (Guild) ID for testing commands
-ADMIN_ROLE_ID=              # Role ID allowed to run administrator commands
-MONGODB_URI=                # MongoDB connection string (e.g. mongodb://127.0.0.1:27017/astrox-license)
-REDIS_URI=                  # Redis connection string (optional - falls back to memory cache)
-HMAC_SECRET=                # Min 32 character 256-bit secret for HMAC key generation
-API_PORT=3000               # Port for the Fastify REST API handshake server
+# Discord Connection Configs
+BOT_TOKEN=your_bot_token_here
+CLIENT_ID=your_discord_application_id
+GUILD_ID=your_target_discord_server_id
+ADMIN_ROLE_ID=authorized_admin_role_id
+
+# Database & Cache URIs
+MONGODB_URI=mongodb://127.0.0.1:27017/astrox-license
+REDIS_URI=mongodb_or_redis_caching_endpoint   # Optional: falls back to Memory Cache
+
+# Cryptographic Keys (Min 32 characters)
+HMAC_SECRET=your_super_secret_signing_key_32_chars_long
+
+# Web Host Settings
+API_PORT=3000
 NODE_ENV=production
 ```
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
-
 - Node.js (v23.0.0+)
-- MongoDB (Running locally or hosted)
-- Redis (Optional, for cross-instance caching)
-- pnpm (`npm install -g pnpm`)
+- MongoDB (Running locally or hosted Atlas cluster)
+- Redis (Optional, for cluster environments)
+- pnpm (Recommended: `npm i -g pnpm`)
 
-### Setup and Running
-
-1. Clone this repository.
-2. Install dependencies:
+### Setup Commands
+1. **Install Dependencies**:
    ```bash
    pnpm install --frozen-lockfile
    ```
-3. Create a `.env` file containing your environment configurations.
-4. Deploy the application's slash commands to Discord:
+2. **Register Slash Commands**:
    ```bash
    pnpm run deploy
    ```
-5. Launch the application:
+3. **Start in Production Mode**:
    ```bash
    pnpm start
+   ```
+4. **Start in Watch/Development Mode**:
+   ```bash
+   pnpm run dev
    ```
 
 ---
 
-## 📂 Command Reference
+## 📂 Interaction Suite Reference
 
-### Licensing Commands (All Users / Moderation)
+### Admin/Staff Suite (`/license` & `/admin`)
+- `/license generate <plugin> <user> <type> [duration] [max-ips]` — Generates a signed license key.
+- `/license verify <key>` — Checks details, owners, and bindings of a license.
+- `/license list [user] [plugin] [status]` — Returns a paginated search list.
+- `/license transfer <key> <new-owner>` — Transfers key ownership, resetting whitelists and HWID locks.
+- `/license revoke <key> [reason]` — Revokes and deactivates a license key.
+- `/admin stats` — Displays database metrics and active plugin summaries.
+- `/admin blacklist <add|remove|list>` — Globally blocks specific IPs, HWIDs, or license keys.
+- `/admin audit [user] [action]` — Accesses the 90-day operations logs.
+- `/admin plugin <add|update|remove|list>` — Registers and configures plugin profiles.
 
-- `/license generate <plugin> <user> <type> [duration] [max-ips]` — Generates a new license key (trial, lifetime, subscription).
-- `/license verify <key>` — Look up details of a license key. Includes a `Check Status` button.
-- `/license list [user] [plugin] [status]` — Returns a paginated listing of matching licenses.
-- `/license transfer <key> <new-owner>` — Transfers ownership, resetting HWID and whitelisted IPs.
-- `/license revoke <key> [reason]` — Revokes a license key (requires confirmation).
-
-### Administration Commands
-
-- `/stats` — Dashboard displaying system counts, type breakdowns, and plugin usage.
-- `/blacklist <add|remove|list>` — Block or unblock licenses, IPs, or HWIDs.
-- `/audit [user] [action]` — View system action history (expires after 90 days).
-- `/plugin <add|update|remove|list>` — Register and manage plugins.
+### User Self-Service Suite (`/mylicense`)
+- `/mylicense` — Lists owned licenses and allows whitelisting current server IPs dynamically.
 
 ---
 
-## 🔌 API Reference (Minecraft Handshake)
+## 🔌 API Handshake Specifications
 
-### Validate License
-
-- **Endpoint**: `POST /api/v1/validate`
-- **Rate Limit**: 10 requests / minute per IP
+### Validation Checkpoint
+- **Route**: `POST /api/v1/validate`
+- **Rate Limit**: 10 requests/minute per client IP (using Fastify-Rate-Limit)
 
 #### Request Payload
-
 ```json
 {
-  "licenseKey": "a1b2c3d4-e5f6-7890-abcd-ef1234567890.1a2b3c4d5e6f7g8h",
-  "pluginId": "my-plugin",
-  "serverIp": "192.168.1.100",
-  "hwid": "my-server-hardware-hash-fingerprint"
+  "licenseKey": "e1a90c9b-640a-4fb4-87be-a5e22709e1e2.f3a5e8d9c2b1a0e4",
+  "pluginId": "custom-plugin-slug",
+  "serverIp": "198.51.100.42",
+  "hwid": "00000000-0000-0000-0000-000000000000"
 }
 ```
 
-#### Response (Success - 200 OK)
-
-Returns a short-lived (60s) JWT signed using the `HMAC_SECRET`.
-
+#### Successful Verification Response (200 OK)
+Returns a 60-second valid JWT signed with the gateway's `HMAC_SECRET` and buyer tags.
 ```json
 {
   "status": "valid",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ey..."
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ey...",
+  "discord": {
+    "ownerId": "858203948576932847",
+    "ownerTag": "buyer_username"
+  }
 }
 ```
 
-#### Response (Rejected - 403 Forbidden)
-
+#### Rejected Response (403 Forbidden)
 ```json
 {
   "status": "invalid",
   "error": "License validation failed"
 }
 ```
+*Note: Any failure is obfuscated into a generic message to block probing.*
 
 ---
 
-## 🐳 Pterodactyl Deployment
+## 🐳 Pterodactyl Panel Deployment
 
-This system is pre-configured for deployment on Pterodactyl Panel. We provide a full, importable egg configuration:
-
-1. Import `egg-astrox-license.json` into your Pterodactyl Panel under the Nests tab.
-2. Create a server using the newly imported **AstroX License Bot** egg.
-3. Configure the environment variables directly within the Pterodactyl Panel settings UI (under Startup settings).
-4. Pterodactyl will automatically parse and write these values to the local `.env` configuration on server startup.
+AstroX License includes an importable egg definition for Pterodactyl Panel:
+1. Go to your Pterodactyl Admin Area -> **Nests** -> Import Egg.
+2. Select [egg-astrox-license.json](file:///f:/Projects/astrox-license/astrox-license-bot/egg-astrox-license.json).
+3. Create a server using the imported **AstroX License Bot** Egg.
+4. Set environment parameters via the **Startup** settings in the server dashboard. Pterodactyl automatically formats and saves these configurations into your `.env` configuration file on startup.

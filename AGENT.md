@@ -1,30 +1,21 @@
-# AstroX License Bot & API — Agent Documentation (AGENT.md)
+# AstroX License Bot & API — Agent Master Integration Guide (AGENT.md)
 
-This document details the architecture, cryptographic mechanics, security review findings, and operational directives for the **AstroX License** repository. It serves as a master blueprint for current developers and future agentic models interfacing with the codebase.
-
----
-
-## 🕵️‍♂️ Agent Profile & Assessment Context
-
-- **Assigned Operator**: Silas (Antigravity)
-- **Role**: Senior Security Engineer / Threat Emulation Specialist (NSA TAO / DARPA consultant)
-- **Engagement Context**: **Project Ironclad** (authorized red team security validation, anti-cheat signature testing, and threat infrastructure assessment under Mandiant audit contract).
-- **Security Posture**: Clean implementation, minimal abstractions, production-ready rate-limiting, and timing-safe cryptographic checks.
+This document acts as the definitive technical blueprint and operational guide for the **AstroX License** repository. It is designed to enable AI agents and developers to rapidly understand the system architecture, database schemas, cryptographic protections, validation workflows, and development guidelines.
 
 ---
 
-## 🏗️ System Architecture & Codebase Map
+## 🏗️ Architecture & Codebase Map
 
-AstroX License is a hybrid system containing a **Fastify REST API Handshake Server** (for Minecraft plugins or remote client handshakes) and a **Discord Bot Interface** (for administration and user self-service).
+AstroX License combines a **Fastify REST API Handshake Server** (used by remote clients/plugins to validate licensing status) with a **Discord Bot Interface** (used by administrators to manage licenses and by users to view or self-manage their whitelisted IPs).
 
 ```
                       ┌──────────────────────────────────────┐
                       │             Discord Client           │
                       └──────────────────┬───────────────────┘
-                                         │ (Slash / Interactions)
+                                         │ (Slash Commands & Component Interactions)
                                          ▼
 ┌──────────────────┐  HTTP POST  ┌───────────────┐               ┌───────────────┐
-│ Minecraft Plugin ├────────────>│  Fastify API  │──────────────>│ Mongoose / DB │
+│ Java Plugin/SDK  ├────────────>│  Fastify API  │──────────────>│ Mongoose DB   │
 └──────────────────┘             └───────┬───────┘               └───────────────┘
                                          │
                                          ▼
@@ -33,156 +24,132 @@ AstroX License is a hybrid system containing a **Fastify REST API Handshake Serv
                                  └───────────────┘
 ```
 
-### 📂 Directory Structure
+### 📂 File Structure and Module Links
 
-- `src/index.js`: Main bootstrap sequence, managing graceful startup and shutdown hooks (SIGINT, SIGTERM).
-- `src/api/`: Fastify server configuration and routing handlers.
-  - `server.js`: Connects Fastify, configures global IP rate-limits, registers routes.
-  - `routes/validate.js`: Validation endpoint (`POST /api/v1/validate`) handling Zod parsing and handshake execution.
-- `src/bot/`: Discord.js v14 client implementation.
-  - `client.js`: Gateway client initialization with partials.
-  - `handler.js`: Dynamic glob importer for events and commands.
-  - `deploy-commands.js`: Deploy commands to Discord API.
-  - `commands/`: Slash command modules (`admin.js`, `license.js`, `mylicense.js`).
-  - `components/`: ActionRow component handlers (buttons, select menus).
-- `src/db/`: MongoDB connection setup and Mongoose model definitions.
-  - `connection.js`: Mongoose connector.
-  - `models/`: Schemas for `License`, `Plugin`, `Blacklist`, and `AuditLog`.
-- `src/services/`: Core logic layers.
-  - `cryptoService.js`: HMAC key signatures, SHA256 hashing, and jose JWT routines.
-  - `licenseService.js`: Main lifecycle commands (create, validate, revoke, transfer).
-  - `cacheService.js`: Keyv integration (Redis or memory) for validation optimization.
-- `src/utils/`: Formatters, standard configurations, constants, and validators.
-
----
-
-## 🔑 Database Schema Reference
-
-### 1. License Schema (`src/db/models/License.js`)
-
-Stores license instances bound to plugins, owners, and hardware fingerprints.
-
-- `key` (String, Index, Unique): Signed UUID key.
-- `pluginId` (ObjectId ref 'Plugin'): The associated plugin.
-- `ownerId` (String, Index): Discord user ID of the license owner.
-- `ownerTag` (String): Discord tag of the owner.
-- `type` (String enum): `trial`, `lifetime`, or `subscription`.
-- `status` (String enum): `active`, `suspended`, `revoked`, or `expired`.
-- `maxIps` (Number): Maximum concurrent whitelisted IPs allowed (default: 1).
-- `allowedIps` (Array of Strings): Active whitelisted IP addresses.
-- `hwid` (String): SHA-256 hardware fingerprint hash (null until first check).
-- `expiresAt` (Date): Expired TTL index (auto-clears/transitions).
-- `activatedAt` / `lastValidatedAt` (Date): Operational timestamps.
-- `metadata` (Map): Extensible fields (e.g., tracking validation history).
-
-### 2. Blacklist Schema (`src/db/models/Blacklist.js`)
-
-Restricts access based on specific fields:
-
-- `type` (String enum): `key`, `hwid`, or `ip`.
-- `value` (String, Index): The identifier string.
-- `reason` (String): Ban justification.
-- `addedBy` (String): Operator Discord ID.
-
-### 3. Plugin Schema (`src/db/models/Plugin.js`)
-
-Plugin registration metadata:
-
-- `name` (String) / `slug` (String, Unique, Index): Plugin identifiers.
-- `version` (String) / `description` (String) / `iconUrl` (String).
-
-### 4. Audit Log Schema (`src/db/models/AuditLog.js`)
-
-System audit logging with a 90-day TTL retention index:
-
-- `action` (String enum): Action executed.
-- `actorId` (String): Account that executed the action (e.g., user ID or `'system'`).
-- `targetKey` (String): _Masked_ license key target.
-- `details` (Mixed): Payload metadata.
-- `ip` (String): Server client IP.
-- `timestamp` (Date, Index): Expire index set to `'90d'`.
+- [src/index.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/index.js): Entrypoint. Handles initialization, database connectivity, Fastify binding, and clean shutdown triggers (`SIGINT`, `SIGTERM`).
+- [src/api/server.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/api/server.js): API server setup. Configures IP rate-limiting, registers routes, and boots Fastify.
+- [src/api/routes/validate.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/api/routes/validate.js): Handshake endpoint (`POST /api/v1/validate`). Handles validation inputs via Zod/JSON-schema parsing.
+- [src/bot/client.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/bot/client.js): Discord.js gateway client setup.
+- [src/bot/handler.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/bot/handler.js): Event and command registration handler.
+- [src/bot/commands/](file:///f:/Projects/astrox-license/astrox-license-bot/src/bot/commands/): Slash command controllers:
+  - [license.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/bot/commands/license.js) (administrative license manipulation)
+  - [mylicense.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/bot/commands/mylicense.js) (user self-management)
+  - [admin.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/bot/commands/admin.js) (administrative configuration)
+- [src/db/connection.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/db/connection.js): MongoDB connector.
+- [src/db/models/](file:///f:/Projects/astrox-license/astrox-license-bot/src/db/models/): Mongoose Schemas:
+  - [License.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/db/models/License.js) (license status, whitelisted IPs, HWID hashes, type, metadata)
+  - [Plugin.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/db/models/Plugin.js) (registered plugin meta and slug identifiers)
+  - [Blacklist.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/db/models/Blacklist.js) (banned keys, HWID hashes, or IP ranges)
+  - [AuditLog.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/db/models/AuditLog.js) (operation audit logs with a 90-day TTL)
+- [src/services/cryptoService.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/services/cryptoService.js): Central cryptographic module. Houses signature generation, signature checks, JWT signing/verifying, and HWID SHA-256 hashing.
+- [src/services/signatureService.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/services/signatureService.js): Generates and caches an RSA keypair for asymmetric verification options.
+- [src/services/licenseService.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/services/licenseService.js): Main operations orchestration (key generation, validation flow, IP checks, revocation).
+- [src/services/cacheService.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/services/cacheService.js): Keyv storage integration (using Redis or falling back to in-memory).
 
 ---
 
-## 🔒 Cryptographic & Security Mechanisms
+## 🗃️ Database Schemas & Data Model Reference
 
-### 1. License Signature Mechanics (`src/services/cryptoService.js`)
+### 1. License Schema ([License.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/db/models/License.js))
+| Property | Type | Indexing | Purpose |
+| :--- | :--- | :--- | :--- |
+| `key` | String | Unique, Indexed | The cryptographic license key (`uuid.signature_prefix`). |
+| `pluginId` | ObjectId | Indexed | Reference to the corresponding `Plugin` model. |
+| `ownerId` | String | Indexed | Discord User ID of the buyer. |
+| `ownerTag` | String | None | Discord User tag (e.g. `username`). |
+| `type` | String | None | Enum: `trial`, `lifetime`, `subscription`. |
+| `status` | String | None | Enum: `active`, `suspended`, `revoked`, `expired`. |
+| `maxIps` | Number | None | Maximum allowed concurrent IP validations (default: 1). |
+| `allowedIps`| Array[String]| None | Active whitelisted IPv4/IPv6 addresses bound to this license. |
+| `hwid` | String | None | The SHA-256 hash of the client's raw hardware identifier. |
+| `expiresAt` | Date | TTL Index | Expiration timestamp. MongoDB auto-removes/invalidates past this date. |
+| `activatedAt`| Date | None | Timestamp of the first successful validation handshake. |
+| `metadata` | Map | None | General logging store, tracks IP check-ins. |
 
-- **Key Generation**: Generates a standard UUID v4, computes an HMAC-SHA256 signature using `HMAC_SECRET`, slices the first 16 hex characters, and joins them: `${uuid}.${signature}`.
-- **Signature Verification**: Splits the incoming key, rebuilds the expected signature from the UUID part, and verifies them using `crypto.timingSafeEqual`. This protects against timing attacks designed to guess signatures character-by-character.
+### 2. Blacklist Schema ([Blacklist.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/db/models/Blacklist.js))
+- Used to explicitly ban items.
+- Fields:
+  - `type` (String): Enum: `key`, `hwid`, `ip`.
+  - `value` (String): Indexed string of the banned entity.
+  - `reason` (String): Text explanation.
+  - `addedBy` (String): Discord User ID of the staff member who applied the ban.
 
-### 2. Validation Token (JWT) & Discord Metadata
+### 3. Plugin Schema ([Plugin.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/db/models/Plugin.js))
+- Tracks registered Minecraft plugins.
+- Fields:
+  - `name` (String): Human-readable name.
+  - `slug` (String): Unique, indexed URL-friendly slug matching the client identifier (e.g., `my-plugin`).
+  - `version` (String): Current production version.
+  - `description` (String): Descriptive text.
 
-- Upon successful validation, the server generates a short-lived (60s) JWT signed with `HMAC_SECRET` using the HS256 algorithm. The token contains the `licenseId`, `pluginSlug`, `ownerId`, and hashed `hwid`. The Java plugin uses this token for short-lived session verification.
-- The server also returns a `discord` object containing the `ownerId` and `ownerTag` of the license holder, enabling plugins to display registration ownership at startup or in logs.
+### 4. Audit Log Schema ([AuditLog.js](file:///f:/Projects/astrox-license/astrox-license-bot/src/db/models/AuditLog.js))
+- Logs operations, indexed with a 90-day TTL to auto-prune stale records.
+- Fields:
+  - `action` (String): Enum representing the operation.
+  - `actorId` (String): Account execution ID or `'system'`.
+  - `targetKey` (String): Masked license key string (`*` padded).
+  - `details` (Mixed): Arbitrary object data.
+  - `ip` (String): Executing IP address.
+  - `timestamp` (Date): Auto-purges after 90 days (`expires: '90d'`).
 
-### 3. Hardware Fingerprinting (HWID)
+---
 
-- The raw hardware ID (retrieved on client machine via OS tools, e.g., `wmic` on Windows or `/var/lib/dbus/machine-id` on Linux) is never sent or stored in plaintext. The client transmits it, and the API computes a SHA-256 hash (`hashHwid`) before database lookup or persistence.
+## 🔒 Cryptographic Handshake & Protection Mechanics
 
-### 4. Shared License Abuse Detection
+### 1. Symmetric Signature Generation
+License keys are structured as `${uuid}.${signature}`.
+1. A standard `UUID v4` is generated.
+2. The UUID is signed with HMAC-SHA256 using `HMAC_SECRET`:
+   $$\text{Signature} = \text{HMAC-SHA256}(\text{HMAC\_SECRET}, \text{UUID})$$
+3. The first 16 hexadecimal characters of the signature are sliced and appended to the UUID.
 
-- The system tracks client IPs that check in over a rolling 24-hour window using `validationIps` in the license metadata.
-- If the unique IP count in the window exceeds `SHARED_DETECTION_THRESHOLD` (default: 3), the license status is immediately changed to `suspended` and logged to the audit system.
+### 2. Signature Validation & Timing-Safe Comparisons
+When a client sends a license key to `/api/v1/validate`:
+1. The server splits the incoming string by the `.` character.
+2. It extracts the UUID and signature prefix.
+3. It regenerates the signature from the UUID using the configured `HMAC_SECRET`.
+4. It compares the extracted signature prefix with the newly generated signature prefix.
+5. **Critical**: It performs the comparison using `crypto.timingSafeEqual(buf1, buf2)`. The server rejects the handshake immediately if the lengths or contents differ, preventing timing attacks.
 
-### 5. Obfuscated Responses
+### 3. Verification Token (Short-lived JWT)
+Once the signature, HWID, IP whitelist, and status checks pass:
+1. The server issues a short-lived (60s) JSON Web Token (JWT).
+2. The JWT is signed with the `HMAC_SECRET` using the HS256 algorithm.
+3. Payload parameters:
+   - `licenseId`: ID of the license in the database.
+   - `pluginSlug`: The unique plugin slug.
+   - `ownerId`: Discord ID of the buyer.
+   - `hwid`: SHA-256 hash of the HWID.
+4. Remote clients cache this token locally. For subsequent checks within the 60-second window, the client uses the cached JWT without reaching out to the validation endpoint, avoiding rate-limiting.
 
-- The Fastify API does not disclose detailed validation failures to client handshakes. Any failure (blacklist, HWID mismatch, expired license, invalid signature) returns a generic `403 Forbidden` response:
+### 4. Hardware Fingerprinting (HWID)
+- The client extracts system hardware parameters (e.g., CPU identifier, system UUID).
+- The raw hardware ID is never sent or stored in plaintext.
+- The client sends the string, and the server converts it into a `SHA-256` hash immediately before making database queries or lookups.
+
+### 5. Shared License Abuse Detection
+- The system prevents license sharing by logging validation IPs in a rolling 24-hour window inside the license metadata.
+- If the unique IP count in this rolling 24-hour window exceeds the threshold (default: 3), the license status changes automatically to `suspended` and audits the incident.
+
+### 6. Obfuscated Responses
+- To restrict information leakage, the API does not return detail-rich rejection reasons to the client.
+- Whether the failure is due to a blacklisted IP, a mismatched HWID, an expired trial, or an invalid HMAC signature, the server responds with a generic `403 Forbidden` response:
   ```json
   {
     "status": "invalid",
     "error": "License validation failed"
   }
   ```
-  This denies attackers target clues when probing the API.
 
 ---
 
-## 🚀 Development, Testing, and linting
+## 🤖 Instructions for AI Agents & Model Runs
 
-### Env Validation
+If you are an AI model or developer tasked with making edits or modifications to this codebase, you **must** adhere to the following conventions:
 
-At startup, `src/utils/config.js` validates environment parameters using Zod. The server immediately throws a fatal exception if mandatory keys (`BOT_TOKEN`, `CLIENT_ID`, `GUILD_ID`, `ADMIN_ROLE_ID`, `MONGODB_URI`, `HMAC_SECRET`) are missing or if `HMAC_SECRET` is shorter than 32 characters.
-
-### Run commands
-
-- **Start production server**: `npm run start`
-- **Start development watcher**: `npm run dev`
-- **Deploy slash commands to Discord**: `npm run deploy`
-- **Execute tests**: `npm run test` (uses Vitest)
-- **Lint checking**: `npm run lint` / `npm run lint:fix` (uses ESLint 9+)
-- **Code formatter**: `npm run format` (uses Prettier)
-
-### Formatting & Parser Utilities
-
-Core helper functions reside in [formatters.js](file:///f:/Projects/astrox-license/src/utils/formatters.js). Key modules include:
-
-- `maskIpAddress(ip)`: Conceals the last octet of an IPv4 address (e.g. `192.168.1.xxx`) to protect PII in audits.
-- `formatBytes(bytes)`: Translates memory stats into human-readable strings (e.g., MB, GB).
-- `parseDuration(str)`: Flexibly converts human-readable duration strings (e.g., `12h`, `30m`, `3d`, `2w`) or presets into raw milliseconds.
-
----
-
-## 🛡️ Hardening & Optimization Recommendations
-
-1.  **Asymmetric Signing (Ed25519)**:
-    - _Finding_: The system uses symmetric HMAC-SHA256. If a malicious client extracts the secret key, they can forge license keys.
-    - _Harden_: Migrate to asymmetric cryptography (Ed25519). The bot retains the Private Key for license generation, while Java plugins only embed the Public Key to verify signed tokens locally, eliminating secret exposure.
-2.  **Rate-Limit Optimization**:
-    - _Finding_: Fastify rate limit uses memory-store by default. In multi-instance or serverless environments, this can be bypassed or leads to state inconsistency.
-    - _Harden_: Configure the Fastify rate-limiter to use the Redis instance if `REDIS_URI` is provided.
-3.  **Strict HWID Verification**:
-    - _Finding_: Client HWID extraction can be mocked or faked easily by patching the Java integration library.
-    - _Harden_: Implement secondary validation handshakes or payload signing from the client using JVM-native verification libraries.
-
----
-
-## 🤖 Instructions for Future Agent Runs
-
-When incoming agents receive a request to alter or update this codebase:
-
-1.  **Strict Lint Rules**: Make sure changes do not break the ESLint/Prettier format check. Run `npm run lint` and `npm run format` before submitting edits.
-2.  **Always Maintain Timing-Safety**: When comparing hashes or signatures, do not use `==` or `===`. Always leverage `crypto.timingSafeEqual` with matching buffer lengths.
-3.  **Audit Trail Enforcement**: Every status modification or license creation must write to `AuditLog.log` using the appropriate `AUDIT_ACTIONS` enum.
-4.  **No Plaintext Keys in Logs**: Ensure that `maskKey(key)` is applied before log prints or database logs to prevent leaking active license keys in logs.
-5.  **Always Run Test Suite**: Verify changes using `npm test`. If changing model or validation schemas, update matching mock tests inside `tests/` directories.
+1. **Maintain Timing Safety**: Never use `==` or `===` when comparing cryptographic hashes, signatures, or keys. Always use `crypto.timingSafeEqual` with Buffers of equal length.
+2. **Strict Lint and Code Styling**: Run `npm run lint` and `npm run format` prior to committing changes. Code must strictly compile under ESLint 9+ guidelines and match Prettier rules.
+3. **Audit Trails**: Every administrative change, status transition (e.g. suspension, revocation, generation), or blacklist addition must create an entry in the database using the `AuditLog` model.
+4. **Key Masking**: Never write full license keys to logs, standard output, or metadata fields. Always use the `maskKey(key)` utility function before printing or logging.
+5. **No Sandbox Escapes**: Ensure all dependencies are managed correctly through `pnpm-workspace.yaml`. Do not introduce bloated custom libraries when Node.js native packages (like `node:crypto`) can fulfill the task.
+6. **Maintain Test Suite Integrity**: Run `npm test` after modifying logic. Ensure unit tests in the `/tests` folder are updated to mirror modifications made to models or route handlers.

@@ -37,8 +37,8 @@ async function authenticateAdmin(request, reply) {
   const token = authHeader.substring(7);
   try {
     const { payload } = await jwtVerify(token, secretKey, {
-      issuer: 'astrox-license',
-      audience: 'astrox-license-admin',
+      issuer: 'cipher-license',
+      audience: 'cipher-license-admin',
       algorithms: ['HS256'],
       clockTolerance: '60s', // Allow up to 60 seconds of clock drift between frontend and backend
     });

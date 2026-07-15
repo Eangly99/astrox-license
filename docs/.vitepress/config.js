@@ -1,11 +1,11 @@
-import { withMermaid } from 'vitepress-plugin-mermaid';
+﻿import { withMermaid } from 'vitepress-plugin-mermaid';
 
 export default withMermaid({
-  base: '/astrox-license/',
-  title: 'AstroX License',
+  base: '/cipher-license/',
+  title: 'Cipher License',
   description: 'Developer Wiki & Documentation',
   themeConfig: {
-    siteTitle: 'AstroX Docs',
+    siteTitle: 'Cipher Docs',
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Guide', link: '/introduction' },
@@ -31,13 +31,14 @@ export default withMermaid({
         items: [{ text: 'Java Plugin Guide', link: '/java-integration' }],
       },
     ],
-    socialLinks: [{ icon: 'github', link: 'https://github.com/Eangly99/astrox-license' }],
+    socialLinks: [{ icon: 'github', link: 'https://github.com/Eangly99/cipher-license' }],
     footer: {
       message: 'Protected under Ironclad security assessments.',
-      copyright: 'Copyright © 2026 AstroX License',
+      copyright: 'Copyright © 2026 Cipher License',
     },
     search: {
       provider: 'local',
     },
   },
 });
+

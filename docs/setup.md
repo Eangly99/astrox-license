@@ -1,6 +1,6 @@
-# Setup & Deployment
+﻿# Setup & Deployment
 
-Deploy AstroX License on your VPS, hosting node, or directly inside Pterodactyl Panel using Node.js v23+.
+Deploy Cipher License on your VPS, hosting node, or directly inside Pterodactyl Panel using Node.js v23+.
 
 ## Prerequisites
 
@@ -21,7 +21,7 @@ Edit the generated `.env` file to supply your Discord Bot Token, Mongo Connectio
 
 ```ini
 PORT=3000
-MONGODB_URI=mongodb://127.0.0.1:27017/astrox-license
+MONGODB_URI=mongodb://127.0.0.1:27017/cipher-license
 BOT_TOKEN=your_discord_bot_token_here
 CLIENT_ID=your_discord_client_id_here
 GUILD_ID=your_discord_guild_id_here
@@ -42,3 +42,4 @@ Launch the main daemon script using npm:
 ```bash
 npm start
 ```
+

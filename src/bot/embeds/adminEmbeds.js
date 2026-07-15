@@ -6,29 +6,50 @@ import { formatDate } from '../../utils/formatters.js';
  * Generate dashboard statistics embed.
  */
 export function createStatsEmbed(stats) {
+  const total = stats.total.toString();
+  const active = stats.active.toString();
+  const suspended = stats.suspended.toString();
+  const revoked = stats.revoked.toString();
+  const expired = stats.expired.toString();
+
+  const overviewLine = [
+    `📈 **Total:** \`${total}\``,
+    `✅ **Active:** \`${active}\``,
+    `🔒 **Suspended:** \`${suspended}\``,
+    `❌ **Revoked:** \`${revoked}\``,
+    `⏳ **Expired:** \`${expired}\``
+  ].join('  •  ');
+
   const typesLines =
     Object.entries(stats.types)
-      .map(([type, count]) => `• ${bold(type.toUpperCase())}: ${count}`)
-      .join('\n') || 'No license data';
+      .map(([type, count]) => `├ **${type.toUpperCase()}**: \`${count}\``)
+      .join('\n') || '└ *No license data*';
+  
+  let typesFormatted = typesLines;
+  if (typesLines.includes('├')) {
+    const lastIndex = typesLines.lastIndexOf('├');
+    typesFormatted = typesLines.substring(0, lastIndex) + '└' + typesLines.substring(lastIndex + 1);
+  }
 
   const pluginsLines =
-    stats.plugins.map((p) => `• ${bold(p.name)} (${p.slug}): ${p.count}`).join('\n') ||
-    'No plugin data';
+    stats.plugins.map((p) => `├ **${p.name}** (\`${p.slug}\`): \`${p.count}\``).join('\n') ||
+    '└ *No plugin data*';
+
+  let pluginsFormatted = pluginsLines;
+  if (pluginsLines.includes('├')) {
+    const lastIndex = pluginsLines.lastIndexOf('├');
+    pluginsFormatted = pluginsLines.substring(0, lastIndex) + '└' + pluginsLines.substring(lastIndex + 1);
+  }
 
   return new EmbedBuilder()
-    .setTitle('AstroX License — Administrator Dashboard')
+    .setTitle('📊 System Analytics Dashboard')
     .setColor(Colors.PRIMARY)
-    .addFields(
-      { name: 'Total Licenses', value: stats.total.toString(), inline: true },
-      { name: 'Active Licenses', value: stats.active.toString(), inline: true },
-      { name: 'Suspended Licenses', value: stats.suspended.toString(), inline: true },
-      { name: 'Revoked Licenses', value: stats.revoked.toString(), inline: true },
-      { name: 'Expired Licenses', value: stats.expired.toString(), inline: true },
-      { name: '\u200B', value: '\u200B', inline: true }, // Spacer
-      { name: 'By Type', value: typesLines, inline: false },
-      { name: 'By Plugin', value: pluginsLines, inline: false },
+    .setDescription(
+      `### ⚡ Database Metrics Overview\n${overviewLine}\n\n` +
+      `### 🔑 Licenses by Type\n${typesFormatted}\n\n` +
+      `### 🔌 Licenses by Registered Plugin\n${pluginsFormatted}`
     )
-    .setFooter({ text: 'Stats are cached for up to 60 seconds • AstroX License' })
+    .setFooter({ text: 'Stats are cached for up to 60 seconds • Cipher License' })
     .setTimestamp();
 }
 
@@ -37,27 +58,37 @@ export function createStatsEmbed(stats) {
  */
 export function createAuditEmbed(logs, page, totalPages) {
   const embed = new EmbedBuilder()
-    .setTitle('System Audit Log')
+    .setTitle('🛡️ Security Audit Ledger')
     .setColor(Colors.NEUTRAL)
-    .setFooter({ text: `Page ${page}/${totalPages} • AstroX License` })
+    .setFooter({ text: `Page ${page}/${totalPages} • Cipher License` })
     .setTimestamp();
 
   if (logs.length === 0) {
-    embed.setDescription('No audit logs found.');
+    embed.setDescription('*No audit logs recorded in this segment.*');
     return embed;
   }
 
   const lines = logs.map((log, index) => {
-    const num = index + 1 + (page - 1) * 10;
     const actor = userMention(log.actorId);
-    const action = bold(log.action.toUpperCase());
+    const action = log.action.toUpperCase();
+    
+    let emoji = '⚙️';
+    if (action.includes('GENERATE')) emoji = '🔑';
+    if (action.includes('VERIFY')) emoji = '📡';
+    if (action.includes('REVOKE')) emoji = '❌';
+    if (action.includes('SUSPEND')) emoji = '🔒';
+    if (action.includes('REACTIVATE')) emoji = '🔓';
+    if (action.includes('BLACKLIST_ADD')) emoji = '🚫';
+    if (action.includes('BLACKLIST_REMOVE')) emoji = '✅';
+    if (action.includes('TRANSFER')) emoji = '🔄';
+
     const key = log.targetKey ? inlineCode(log.targetKey) : 'N/A';
     const time = formatDate(log.timestamp);
 
-    return `${bold(num.toString())}. [${time}] ${actor} executed ${action} on key ${key}`;
+    return `\`${index + 1 + (page - 1) * 10}.\` ${emoji} ${actor} ➔ **${action}** on ${key}\n└ ${time}`;
   });
 
-  embed.setDescription(lines.join('\n'));
+  embed.setDescription(lines.join('\n\n'));
   return embed;
 }
 
@@ -66,26 +97,25 @@ export function createAuditEmbed(logs, page, totalPages) {
  */
 export function createBlacklistEmbed(entries) {
   const embed = new EmbedBuilder()
-    .setTitle('Global Blacklist Registry')
+    .setTitle('🚫 Global Blacklist Registry')
     .setColor(Colors.DANGER)
-    .setFooter({ text: '• AstroX License' })
+    .setFooter({ text: '• Cipher License' })
     .setTimestamp();
 
   if (entries.length === 0) {
-    embed.setDescription('No items currently registered on the global blacklist.');
+    embed.setDescription('*The global blacklist is currently empty.*');
     return embed;
   }
 
   const lines = entries.map((entry, index) => {
-    const num = index + 1;
-    const val = inlineCode(entry.value.length > 24 ? `${entry.value.slice(0, 24)}…` : entry.value);
-    const type = bold(entry.type.toUpperCase());
+    const val = inlineCode(entry.value.length > 30 ? `${entry.value.slice(0, 30)}…` : entry.value);
+    const type = entry.type.toUpperCase();
     const reason = entry.reason;
     const banner = userMention(entry.addedBy);
 
-    return `${bold(num.toString())}. [${type}] ${val} | Reason: ${reason} (by ${banner})`;
+    return `\`${index + 1}.\` **[${type}]** ${val}\n└ 💬 *"${reason}"*  •  Blocked by ${banner}`;
   });
 
-  embed.setDescription(lines.join('\n'));
+  embed.setDescription(lines.join('\n\n'));
   return embed;
 }

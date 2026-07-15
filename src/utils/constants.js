@@ -1,4 +1,4 @@
-// NOTE: Keep in sync with dashboard constants in astrox-license-dash/src/lib/constants.ts
+// NOTE: Keep in sync with dashboard constants in cipher-dash/src/lib/constants.ts
 /** License types */
 export const LICENSE_TYPES = Object.freeze({
   TRIAL: 'trial',
@@ -58,7 +58,7 @@ export const CACHE_TTL = Object.freeze({
 
 /** JWT settings */
 export const JWT = Object.freeze({
-  ISSUER: 'astrox-license',
+  ISSUER: 'cipher-license',
   AUDIENCE: 'minecraft-plugin',
   EXPIRY: '60s',
 });

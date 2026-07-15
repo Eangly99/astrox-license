@@ -1,8 +1,8 @@
----
+﻿---
 layout: home
 
 hero:
-  name: 'AstroX License'
+  name: 'Cipher License'
   text: 'Developer Docs'
   tagline: 'A production-grade, cryptographically secure licensing framework for Minecraft plugins.'
   actions:
@@ -33,3 +33,4 @@ features:
     title: Audits & Blacklists
     details: Comprehensive audit logging for all operations alongside IP, HWID, and Key blacklists for rapid attack mitigation.
 ---
+

@@ -1,6 +1,6 @@
-# Java Plugin Integration Guide
+﻿# Java Plugin Integration Guide
 
-This guide provides a comprehensive walkthrough for integrating the **AstroX License** verification handshake into a Java-based Minecraft plugin (Spigot, Paper, Folia). It details the handshake lifecycle, complete code templates, and security hardening methodologies (like XOR string encryption and multi-stage scattered checks) to protect against decompilation and patching.
+This guide provides a comprehensive walkthrough for integrating the **Cipher License** verification handshake into a Java-based Minecraft plugin (Spigot, Paper, Folia). It details the handshake lifecycle, complete code templates, and security hardening methodologies (like XOR string encryption and multi-stage scattered checks) to protect against decompilation and patching.
 
 ---
 
@@ -11,7 +11,7 @@ The handshake execution sequence happens during plugin startup (`onEnable()`) an
 ```mermaid
 sequenceDiagram
     participant P as Java Plugin (Client)
-    participant G as AstroX License Gateway
+    participant G as Cipher License Gateway
     participant D as MongoDB / Cache
 
     P->>P: onEnable() -> Fetch public IP & compute HWID
@@ -38,7 +38,7 @@ sequenceDiagram
 Create the `HWID.java` class inside your utility package. This utility extracts unique OS parameters to identify the physical machine running the plugin. To protect privacy and prevent unauthorized database matching, the raw hardware string is compiled and hashed using **SHA-256** on the client side before transmission.
 
 ```java
-package com.astrox.license.utils;
+package dev.cipher.license.utils;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -78,7 +78,7 @@ public class HWID {
                     .build();
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create("https://api.ipify.org"))
-                    .header("User-Agent", "AstroXLicense-Handshake")
+                    .header("User-Agent", "CipherLicense-Handshake")
                     .timeout(Duration.ofSeconds(3))
                     .GET()
                     .build();
@@ -169,9 +169,9 @@ public class HWID {
 The manager performs asynchronous verification using Java 11's HTTP client. It handles the local validation token (JWT), caching valid statuses for **55 seconds** (gateway expiration is 60s) to minimize network overhead on the server thread.
 
 ```java
-package com.astrox.license;
+package dev.cipher.license;
 
-import com.astrox.license.utils.HWID;
+import dev.cipher.license.utils.HWID;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -233,7 +233,7 @@ public class LicenseManager {
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(URI.create(apiUrl + "/api/v1/validate"))
                         .header("Content-Type", "application/json")
-                        .header("User-Agent", "AstroXLicense-Handshake-Java")
+                        .header("User-Agent", "CipherLicense-Handshake-Java")
                         .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
                         .build();
 
@@ -278,9 +278,9 @@ public class LicenseManager {
 Instantiate the verification manager during the `onEnable()` sequence. Execute the initial verification asynchronously to prevent blocking the main server thread.
 
 ```java
-package com.astrox.example;
+package dev.cipher.example;
 
-import com.astrox.license.LicenseManager;
+import dev.cipher.license.LicenseManager;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -314,7 +314,7 @@ public class ExamplePlugin extends JavaPlugin {
                 });
                 return;
             }
-            getLogger().info("AstroX license validated. Welcome!");
+            getLogger().info("Cipher License validated. Welcome!");
         }).exceptionally(err -> {
             getLogger().severe("Unable to verify license status during boot. Disabling plugin.");
             Bukkit.getScheduler().runTask(this, () -> {
@@ -350,7 +350,7 @@ Storing API URLs, slugs, or license keys in raw string constants allows hackers 
 
 #### XOR Encryption/Decryption Utility
 ```java
-package com.astrox.license.utils;
+package dev.cipher.license.utils;
 
 public class ObfuscationUtils {
 
@@ -403,7 +403,7 @@ When building the production JAR file, use **ProGuard** to strip trace markers a
 -keepattributes !SourceFile,!LocalVariableTable,!LineNumberTable
 
 # Obfuscate all package/class structures related to license handlers
--keep class !com.astrox.license.** { *; }
+-keep class !dev.cipher.license.** { *; }
 
 # Keep Spigot hooks intact while scrambling internals
 -keepclassmembers class * extends org.bukkit.plugin.java.JavaPlugin {
@@ -412,3 +412,4 @@ When building the production JAR file, use **ProGuard** to strip trace markers a
 }
 ```
  Stripping the `LineNumberTable` and `LocalVariableTable` attributes makes it harder to trace the control flow using standard visual debuggers.
+

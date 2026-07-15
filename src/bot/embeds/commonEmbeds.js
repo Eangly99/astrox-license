@@ -1,4 +1,4 @@
-import { EmbedBuilder } from 'discord.js';
+import { EmbedBuilder, blockQuote } from 'discord.js';
 import { Colors } from '../../utils/colors.js';
 
 /**
@@ -11,24 +11,24 @@ import { Colors } from '../../utils/colors.js';
 function createBaseEmbed(title, description, color) {
   return new EmbedBuilder()
     .setTitle(title)
-    .setDescription(description)
+    .setDescription(description ? blockQuote(description) : null)
     .setColor(color)
-    .setFooter({ text: '• AstroX License' })
+    .setFooter({ text: '• Cipher License' })
     .setTimestamp();
 }
 
 export function createSuccessEmbed(title, description) {
-  return createBaseEmbed(title, description, Colors.SUCCESS);
+  return createBaseEmbed(`✨ ${title}`, description, Colors.SUCCESS);
 }
 
 export function createErrorEmbed(title, description) {
-  return createBaseEmbed(title, description, Colors.DANGER);
+  return createBaseEmbed(`🚫 ${title}`, description, Colors.DANGER);
 }
 
 export function createWarningEmbed(title, description) {
-  return createBaseEmbed(title, description, Colors.WARNING);
+  return createBaseEmbed(`⚠️ ${title}`, description, Colors.WARNING);
 }
 
 export function createInfoEmbed(title, description) {
-  return createBaseEmbed(title, description, Colors.PRIMARY);
+  return createBaseEmbed(`💡 ${title}`, description, Colors.PRIMARY);
 }

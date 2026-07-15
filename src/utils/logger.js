@@ -14,7 +14,7 @@ export const logger = pino({
         },
       }
     : undefined,
-  base: { service: 'astrox-license' },
+  base: { service: 'cipher-license' },
   serializers: {
     err: pino.stdSerializers.err,
   },

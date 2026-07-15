@@ -1,4 +1,4 @@
-# Slash Command Suite
+﻿# Slash Command Suite
 
 The system consolidates interactions into three root commands: `/license`, `/mylicense`, and `/admin`.
 
@@ -47,3 +47,4 @@ To provide administrators with immediate operational oversight, the Discord bot 
 
 - **Format**: `Playing: Managing X Licenses` (where `X` represents the total active, suspended, and expired licenses in the registry).
 - **Refresh Interval**: The status is checked and updated dynamically on boot (after a 5-second Gateway connection stabilization delay) and refreshed automatically every **10 minutes**.
+

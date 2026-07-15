@@ -13,7 +13,7 @@ logger.info(
     env: config.NODE_ENV,
     port: config.API_PORT,
   },
-  'Initializing AstroX License System...',
+  'Initializing Cipher License System...',
 );
 
 let isShuttingDown = false;
@@ -68,7 +68,7 @@ async function shutdown(signal) {
     // Disconnect DB
     await disconnectDatabase();
 
-    logger.info('AstroX License shut down successfully.');
+    logger.info('Cipher License shut down successfully.');
     process.exit(0);
   } catch (err) {
     logger.error({ err }, 'Exception encountered during shutdown lifecycle');

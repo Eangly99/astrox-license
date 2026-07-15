@@ -1,8 +1,8 @@
-# Introduction
+﻿# Introduction
 
-AstroX License is a production-grade, high-performance license management system designed for Minecraft plugins (Spigot/Paper).
+Cipher License is a production-grade, high-performance license management system designed for Minecraft plugins (Spigot/Paper).
 
-By combining an interactive self-service Discord bot with a secure Fastify REST API, AstroX License allows plugin developers to distribute, verify, and manage licenses with zero friction. The system binds licenses cryptographically to server hardware fingerprints on first use, features IP rate-limiting, and automatically suspends shared licenses performing concurrent handshakes from multiple networks.
+By combining an interactive self-service Discord bot with a secure Fastify REST API, Cipher License allows plugin developers to distribute, verify, and manage licenses with zero friction. The system binds licenses cryptographically to server hardware fingerprints on first use, features IP rate-limiting, and automatically suspends shared licenses performing concurrent handshakes from multiple networks.
 
 ## Core Capabilities
 
@@ -17,3 +17,4 @@ Locks licenses to hardware fingerprints dynamically on first use, blocking unaut
 ### 📡 Shared Usage Protection
 
 Automatically flags and suspends licenses performing validation handshakes from more than 3 unique IPs in a 24-hour window.
+

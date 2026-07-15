@@ -1,6 +1,6 @@
-# REST Validation API Documentation
+﻿# REST Validation API Documentation
 
-AstroX License exposes a secure, high-performance REST validation endpoint managed by Fastify. This checkpoint is designed to verify license state, bind HWIDs, track IP whitelist boundaries, and block blacklisted targets.
+Cipher License exposes a secure, high-performance REST validation endpoint managed by Fastify. This checkpoint is designed to verify license state, bind HWIDs, track IP whitelist boundaries, and block blacklisted targets.
 
 ---
 
@@ -113,3 +113,4 @@ Returned when an unexpected server error occurs during database operations or JW
   "error": "Internal server error"
 }
 ```
+

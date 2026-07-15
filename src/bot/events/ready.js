@@ -30,7 +30,7 @@ export async function execute(client) {
         const startupEmbed = new EmbedBuilder()
           .setTitle('🤖 System Online')
           .setColor('#3498db')
-          .setDescription('AstroX Licensing bot has established gateway connection successfully.')
+          .setDescription('Cipher Licensing bot has established gateway connection successfully.')
           .addFields(
             { name: 'Bot Tag', value: `\`${client.user.tag}\``, inline: true },
             { name: 'Guilds Served', value: `\`${client.guilds.cache.size}\``, inline: true },

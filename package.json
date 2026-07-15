@@ -1,5 +1,5 @@
 {
-  "name": "astrox-license",
+  "name": "cipher-bot",
   "version": "1.0.0",
   "description": "Production-grade Discord bot for Minecraft plugin license management",
   "type": "module",

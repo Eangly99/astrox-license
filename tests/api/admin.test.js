@@ -15,8 +15,8 @@ async function generateAdminToken(userId = '123456789012345678') {
   return await new SignJWT({ userId })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setIssuer('astrox-license')
-    .setAudience('astrox-license-admin')
+    .setIssuer('cipher-license')
+    .setAudience('cipher-license-admin')
     .setExpirationTime('5m')
     .sign(secretKey);
 }
@@ -26,7 +26,7 @@ async function generateInvalidToken(userId = '123456789012345678') {
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setIssuer('wrong-issuer')
-    .setAudience('astrox-license-admin')
+    .setAudience('cipher-license-admin')
     .setExpirationTime('5m')
     .sign(secretKey);
 }

@@ -1,6 +1,6 @@
-# AstroX License (Bot & REST API)
+﻿# Cipher License (Bot & REST API)
 
-A high-performance, secure license management suite built with **Node.js (v23+)** and **Discord.js v14**. AstroX License allows plugin developers to securely generate, verify, and monitor licenses for Minecraft plugins (Spigot/Paper) with zero friction.
+A high-performance, secure license management suite built with **Node.js (v23+)** and **Discord.js v14**. Cipher License allows plugin developers to securely generate, verify, and monitor licenses for Minecraft plugins (Spigot/Paper) with zero friction.
 
 ---
 
@@ -50,7 +50,7 @@ GUILD_ID=your_target_discord_server_id
 ADMIN_ROLE_ID=authorized_admin_role_id
 
 # Database & Cache URIs
-MONGODB_URI=mongodb://127.0.0.1:27017/astrox-license
+MONGODB_URI=mongodb://127.0.0.1:27017/cipher-license
 REDIS_URI=mongodb_or_redis_caching_endpoint   # Optional: falls back to Memory Cache
 
 # Cryptographic Keys (Min 32 characters)
@@ -151,8 +151,9 @@ Returns a 60-second valid JWT signed with the gateway's `HMAC_SECRET` and buyer 
 
 ## 🐳 Pterodactyl Panel Deployment
 
-AstroX License includes an importable egg definition for Pterodactyl Panel:
+Cipher License includes an importable egg definition for Pterodactyl Panel:
 1. Go to your Pterodactyl Admin Area -> **Nests** -> Import Egg.
-2. Select [egg-astrox-license.json](file:///f:/Projects/astrox-license/astrox-license-bot/egg-astrox-license.json).
-3. Create a server using the imported **AstroX License Bot** Egg.
+2. Select [egg-cipher-license.json](file:///f:/Projects/cipher-license/cipher-bot/egg-cipher-license.json).
+3. Create a server using the imported **Cipher License Bot** Egg.
 4. Set environment parameters via the **Startup** settings in the server dashboard. Pterodactyl automatically formats and saves these configurations into your `.env` configuration file on startup.
+

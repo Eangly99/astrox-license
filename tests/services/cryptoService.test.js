@@ -12,8 +12,7 @@ describe('Crypto Service Tests', () => {
   it('should generate valid license keys', () => {
     const key = generateLicenseKey();
     expect(key).toBeTypeOf('string');
-    expect(key.split('.')).toHaveLength(2);
-    expect(key.split('.')[1]).toHaveLength(16); // Signature slice prefix
+    expect(key).toMatch(/^[A-Z2-9]{5}(-[A-Z2-9]{5}){4}$/);
   });
 
   it('should verify signature for valid keys', () => {
@@ -24,7 +23,7 @@ describe('Crypto Service Tests', () => {
   it('should reject tampered keys', () => {
     const key = generateLicenseKey();
     const lastChar = key.slice(-1);
-    const newLastChar = lastChar === 'a' ? 'b' : 'a';
+    const newLastChar = lastChar === 'A' ? 'B' : 'A';
     const tampered = `${key.slice(0, -1)}${newLastChar}`;
     expect(verifyLicenseKey(tampered)).toBe(false);
     expect(verifyLicenseKey('invalid-key')).toBe(false);
@@ -51,9 +50,9 @@ describe('Crypto Service Tests', () => {
   });
 
   it('should mask license keys securely', () => {
-    const key = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890.abcdef0123456789';
+    const key = '22RYF-4U6NI-ZRPD9-W693L-MNBEY';
     const masked = maskKey(key);
-    expect(masked).toBe('••••••••23456789');
+    expect(masked).toBe('••••••••3L-MNBEY');
     expect(maskKey('short')).toBe('short');
   });
 });

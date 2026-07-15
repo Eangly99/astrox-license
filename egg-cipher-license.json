@@ -1,11 +1,11 @@
-{
-  "_comment": "Pterodactyl Egg Export for AstroX License",
+﻿{
+  "_comment": "Pterodactyl Egg Export for Cipher License",
   "meta": {
     "version": "PTDL_v2",
     "update_url": null
   },
   "exported_at": "2026-06-12T04:48:00+07:00",
-  "name": "AstroX License Bot",
+  "name": "Cipher License Bot",
   "author": "silas@astrox.net",
   "description": "Production-grade licensing Discord bot and REST validate server for Minecraft plugins.",
   "features": null,
@@ -24,7 +24,7 @@
     "installation": {
       "container": "ghcr.io/parkervcp/installers:debian",
       "entrypoint": "bash",
-      "script": "#!/bin/bash\r\n# Installation script for AstroX License\r\napt update && apt install -y git curl\r\nnpm install -g pnpm\r\npnpm --version"
+      "script": "#!/bin/bash\r\n# Installation script for Cipher License\r\napt update && apt install -y git curl\r\nnpm install -g pnpm\r\npnpm --version"
     }
   },
   "variables": [
@@ -68,7 +68,7 @@
       "name": "MongoDB URI",
       "description": "Connection string for the MongoDB instance.",
       "env_variable": "MONGODB_URI",
-      "default_value": "mongodb://127.0.0.1:27017/astrox-license",
+      "default_value": "mongodb://127.0.0.1:27017/cipher-license",
       "user_viewable": true,
       "user_editable": true,
       "rules": "required|string"
@@ -111,3 +111,4 @@
     }
   ]
 }
+

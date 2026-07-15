@@ -36,7 +36,7 @@ function parseConstants(fileContent) {
 describe('Constants Synchronization Test', () => {
   it('should ensure bot and dashboard constants files are identical for common properties', () => {
     const botPath = path.resolve(__dirname, '../../src/utils/constants.js');
-    const dashPath = path.resolve(__dirname, '../../../astrox-license-dash/src/lib/constants.ts');
+    const dashPath = path.resolve(__dirname, '../../../cipher-dash/src/lib/constants.ts');
 
     expect(fs.existsSync(botPath)).toBe(true);
     expect(fs.existsSync(dashPath)).toBe(true);
